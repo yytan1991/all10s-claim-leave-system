@@ -180,7 +180,7 @@ function DailyTable({ rows }) {
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto"></div>
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[720px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
             <th className="px-5 py-3 font-medium">Staff</th>
@@ -228,7 +228,7 @@ function MonthlyTable({ rows }) {
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto"></div>
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[640px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
             <th className="px-5 py-3 font-medium">Staff</th>

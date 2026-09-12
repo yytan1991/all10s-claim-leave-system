@@ -227,7 +227,7 @@ function HistoryTable({ rows, type }) {
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto"></div>
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[560px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
             <th className="px-5 py-3 font-medium">Staff</th>

@@ -38,7 +38,7 @@ export default function Employees() {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto"></div>
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-sand-100 text-ink-500 text-left">
               <tr>
@@ -88,6 +88,7 @@ export default function Employees() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

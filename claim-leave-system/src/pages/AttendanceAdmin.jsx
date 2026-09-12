@@ -179,7 +179,7 @@ function DailyTable({ rows }) {
   }
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto"></div>
+      <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
@@ -217,6 +217,7 @@ function DailyTable({ rows }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
@@ -227,7 +228,7 @@ function MonthlyTable({ rows }) {
   }
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto"></div>
+      <div className="overflow-x-auto">
       <table className="w-full min-w-[640px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
@@ -252,6 +253,7 @@ function MonthlyTable({ rows }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

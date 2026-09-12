@@ -226,7 +226,7 @@ function HistoryTable({ rows, type }) {
   if (rows.length === 0) return <p className="text-sm text-ink-500">Nothing decided yet.</p>
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto"></div>
+      <div className="overflow-x-auto">
       <table className="w-full min-w-[560px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
@@ -255,6 +255,7 @@ function HistoryTable({ rows, type }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

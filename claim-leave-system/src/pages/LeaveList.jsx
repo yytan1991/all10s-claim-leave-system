@@ -50,7 +50,7 @@ export default function LeaveList() {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto"></div>
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-sand-100 text-ink-500 text-left">
               <tr>
@@ -98,6 +98,7 @@ export default function LeaveList() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </AppLayout>

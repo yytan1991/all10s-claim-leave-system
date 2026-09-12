@@ -37,7 +37,8 @@ export default function Sidebar({ className = '' }) {
   const { profile, isManager, isAdmin } = useAuth()
 
   return (
-    <aside className={`flex w-64 flex-col bg-ink-900 text-white shrink-0 h-full ${className}`}>      <div className="px-5 py-6 border-b border-white/10">
+    <aside className={`flex w-64 flex-col bg-ink-900 text-white shrink-0 h-full ${className}`}>
+      <div className="px-5 py-6 border-b border-white/10">
         <p className="font-display text-lg font-semibold leading-tight">ALL 10S</p>
         <p className="text-xs text-white/50 tracking-wide">Leave &amp; Claims</p>
       </div>

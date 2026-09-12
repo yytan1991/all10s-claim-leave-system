@@ -244,7 +244,7 @@ export default function Attendance() {
                   </tr>
                 ))}
               </tbody>
-                        </table>
+            </table>
             </div>
           )}
         </div>

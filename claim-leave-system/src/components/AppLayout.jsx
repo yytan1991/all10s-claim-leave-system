@@ -27,9 +27,9 @@ export default function AppLayout({ title, subtitle, children }) {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <Topbar title={title} subtitle={subtitle} onMenuClick={() => setMobileOpen(true)} showMenuButton={false} />
-        <main className="flex-1 overflow-y-auto px-5 py-6 pb-24 md:px-8 md:pb-6">{children}</main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-6 pb-24 md:px-8 md:pb-6 min-w-0">{children}</main>
       </div>
 
       <BottomNav onMoreClick={() => setMobileOpen(true)} />

@@ -13,6 +13,7 @@ export default function SettingsTypes() {
     <AppLayout title="Settings" subtitle="Configure leave types, claim types, work locations, and CRM pipeline.">
       <div className="mb-6 flex gap-2 border-b border-sand-200 flex-wrap">
         {[
+          { key: 'company', label: 'Company details' },
           { key: 'leave', label: 'Leave types' },
           { key: 'claim', label: 'Claim types' },
           { key: 'locations', label: 'Work locations' },
@@ -32,11 +33,174 @@ export default function SettingsTypes() {
         ))}
       </div>
 
+      {tab === 'company' && <CompanyDetailsManager />}
       {tab === 'leave' && <TypeManager table="leave_types" hasAttachmentFlag />}
       {tab === 'claim' && <TypeManager table="claim_types" />}
       {tab === 'locations' && <LocationManager />}
       {tab === 'stages' && <StageManager />}
     </AppLayout>
+  )
+}
+
+function CompanyDetailsManager() {
+  const { profile, refreshProfile } = useAuth()
+  const [org, setOrg] = useState(null)
+  const [name, setName] = useState('')
+  const [address, setAddress] = useState('')
+  const [registrationNo, setRegistrationNo] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('organizations').select('*').eq('id', profile.org_id).single()
+    if (data) {
+      setOrg(data)
+      setName(data.name || '')
+      setAddress(data.address || '')
+      setRegistrationNo(data.registration_no || '')
+      setPhone(data.phone || '')
+      setEmail(data.email || '')
+      setLogoUrl(data.logo_url || '')
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (profile) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.org_id])
+
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError('')
+    setUploadingLogo(true)
+
+    const ext = file.name.split('.').pop().toLowerCase()
+    const path = `${profile.org_id}/logo.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('company-logos')
+      .upload(path, file, { upsert: true, cacheControl: '3600' })
+
+    if (uploadError) {
+      setUploadingLogo(false)
+      setError(uploadError.message)
+      return
+    }
+
+    const { data: urlData } = supabase.storage.from('company-logos').getPublicUrl(path)
+    // Cache-bust so the new logo shows immediately even though the path is identical.
+    const freshUrl = `${urlData.publicUrl}?t=${Date.now()}`
+
+    const { error: updateError } = await supabase
+      .from('organizations')
+      .update({ logo_url: freshUrl })
+      .eq('id', profile.org_id)
+
+    setUploadingLogo(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setLogoUrl(freshUrl)
+    refreshProfile()
+    e.target.value = ''
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setError('')
+    setSaved(false)
+    setSaving(true)
+    const { error: updateError } = await supabase
+      .from('organizations')
+      .update({ name, address, registration_no: registrationNo, phone, email })
+      .eq('id', profile.org_id)
+    setSaving(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setSaved(true)
+    refreshProfile()
+  }
+
+  if (loading) return <p className="text-sm text-ink-500">Loading…</p>
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <div className="card p-5">
+        <p className="field-label mb-3">Company logo</p>
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 rounded-md border border-sand-200 bg-sand-50 flex items-center justify-center overflow-hidden shrink-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Company logo" className="h-full w-full object-contain" />
+            ) : (
+              <span className="text-xs text-ink-500">No logo</span>
+            )}
+          </div>
+          <div>
+            <label className="btn-secondary text-sm cursor-pointer inline-flex">
+              {uploadingLogo ? 'Uploading…' : logoUrl ? 'Change logo' : 'Upload logo'}
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={handleLogoUpload}
+                disabled={uploadingLogo}
+              />
+            </label>
+            <p className="text-xs text-ink-500 mt-1.5">PNG or JPG. Appears on every payslip PDF.</p>
+          </div>
+        </div>
+      </div>
+
+      <form onSubmit={handleSave} className="card p-5 space-y-4">
+        {error && <Alert tone="rose">{error}</Alert>}
+        {saved && <Alert tone="brand">Saved — this now appears on every payslip header.</Alert>}
+        <p className="text-xs text-ink-500">
+          These details appear on the header of every payslip generated for {org?.name}.
+        </p>
+        <div>
+          <label className="field-label">Company name</label>
+          <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="field-label">Address</label>
+          <textarea className="field-input min-h-[60px]" value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div>
+          <label className="field-label">SSM / Registration No.</label>
+          <input
+            className="field-input"
+            value={registrationNo}
+            onChange={(e) => setRegistrationNo(e.target.value)}
+            placeholder="e.g. 202301012345 (SSM)"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="field-label">Phone</label>
+            <input className="field-input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Email</label>
+            <input className="field-input" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        </div>
+        <button type="submit" disabled={saving} className="btn-primary">
+          {saving ? 'Saving…' : 'Save company details'}
+        </button>
+      </form>
+    </div>
   )
 }
 

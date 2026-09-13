@@ -11,6 +11,7 @@ export default function Employees() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [editingHours, setEditingHours] = useState(null)
+  const [editingPayroll, setEditingPayroll] = useState(null)
   const [addingExisting, setAddingExisting] = useState(false)
 
   useEffect(() => {
@@ -96,6 +97,12 @@ export default function Employees() {
                     >
                       Set leave balance
                     </button>
+                    <button
+                      onClick={() => setEditingPayroll(e)}
+                      className="text-brand-600 hover:underline text-xs font-medium"
+                    >
+                      Payroll info
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -113,6 +120,16 @@ export default function Employees() {
           onSaved={(updated) => {
             setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
             setEditingHours(null)
+          }}
+        />
+      )}
+      {editingPayroll && (
+        <PayrollInfoModal
+          employee={editingPayroll}
+          onClose={() => setEditingPayroll(null)}
+          onSaved={(updated) => {
+            setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+            setEditingPayroll(null)
           }}
         />
       )}
@@ -307,6 +324,100 @@ function WorkHoursModal({ employee, onClose, onSaved }) {
         <div className="flex gap-3 pt-5">
           <button onClick={handleSave} disabled={saving} className="btn-primary">
             {saving ? 'Saving…' : 'Save work hours'}
+          </button>
+          <button onClick={onClose} className="btn-secondary">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PayrollInfoModal({ employee, onClose, onSaved }) {
+  const [department, setDepartment] = useState(employee.department || '')
+  const [position, setPosition] = useState(employee.position || '')
+  const [icNumber, setIcNumber] = useState(employee.ic_number || '')
+  const [bankName, setBankName] = useState(employee.bank_name || '')
+  const [bankAccountNo, setBankAccountNo] = useState(employee.bank_account_no || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    const { data, error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        department: department || null,
+        position: position || null,
+        ic_number: icNumber || null,
+        bank_name: bankName || null,
+        bank_account_no: bankAccountNo || null,
+      })
+      .eq('id', employee.id)
+      .select()
+      .single()
+    setSaving(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    onSaved(data)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="card w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">Payroll info · {employee.full_name}</h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-3">
+            <Alert tone="rose">{error}</Alert>
+          </div>
+        )}
+
+        <p className="text-xs text-ink-500 mb-4">
+          Shown on this staff member's payslips. All fields are optional.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="field-label">Department</label>
+            <input className="field-input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Position / Job title</label>
+            <input className="field-input" value={position} onChange={(e) => setPosition(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">IC / Staff ID</label>
+            <input className="field-input" value={icNumber} onChange={(e) => setIcNumber(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Bank name</label>
+              <input className="field-input" value={bankName} onChange={(e) => setBankName(e.target.value)} />
+            </div>
+            <div>
+              <label className="field-label">Account no.</label>
+              <input
+                className="field-input"
+                value={bankAccountNo}
+                onChange={(e) => setBankAccountNo(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-5">
+          <button onClick={handleSave} disabled={saving} className="btn-primary">
+            {saving ? 'Saving…' : 'Save payroll info'}
           </button>
           <button onClick={onClose} className="btn-secondary">
             Cancel

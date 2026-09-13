@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Users2,
   KanbanSquare,
+  Receipt,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -30,6 +31,7 @@ const staffLinks = [
   { to: '/team-calendar', label: 'Team Calendar', icon: CalendarRange },
   { to: '/claims/new', label: 'New Claim', icon: ReceiptText },
   { to: '/claims', label: 'My Claims', icon: FileStack },
+  { to: '/payslips', label: 'My Payslips', icon: Receipt },
 ]
 
 const crmLinks = [
@@ -45,6 +47,7 @@ const managerLinks = [
 
 const adminLinks = [
   { to: '/employees', label: 'Employees', icon: Users },
+  { to: '/payslips-admin', label: 'Payslips', icon: Receipt },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

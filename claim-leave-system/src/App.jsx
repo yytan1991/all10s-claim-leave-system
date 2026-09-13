@@ -18,6 +18,8 @@ import CrmLeadForm from './pages/CrmLeadForm'
 import CrmLeadDetail from './pages/CrmLeadDetail'
 import SuperadminOrganizations from './pages/SuperadminOrganizations'
 import SuperadminUsers from './pages/SuperadminUsers'
+import MyPayslips from './pages/MyPayslips'
+import PayslipsAdmin from './pages/PayslipsAdmin'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
@@ -150,6 +152,22 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <Employees />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payslips"
+        element={
+          <ProtectedRoute>
+            <MyPayslips />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payslips-admin"
+        element={
+          <ProtectedRoute requireAdmin>
+            <PayslipsAdmin />
           </ProtectedRoute>
         }
       />

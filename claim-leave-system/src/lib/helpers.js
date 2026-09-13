@@ -81,6 +81,26 @@ export function initials(name) {
     .join('')
 }
 
+// Cycles through a palette of pill colors for pipeline stages so each
+// stage is visually distinct; won/lost stages get fixed colors.
+const STAGE_PALETTE = [
+  'bg-sand-100 text-ink-700',
+  'bg-brand-50 text-brand-700',
+  'bg-amber-50 text-amber-600',
+  'bg-rose-50 text-rose-600',
+]
+export function stagePillClass(stage, index = 0) {
+  if (!stage) return 'bg-sand-100 text-ink-500'
+  if (stage.is_won) return 'bg-brand-50 text-brand-700'
+  if (stage.is_lost) return 'bg-rose-50 text-rose-600'
+  return STAGE_PALETTE[index % STAGE_PALETTE.length]
+}
+
+export function isOverdue(dateStr) {
+  if (!dateStr) return false
+  return dateStr < toISODate(new Date())
+}
+
 export function toISODate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')

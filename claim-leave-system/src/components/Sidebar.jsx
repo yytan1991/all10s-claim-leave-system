@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -10,8 +11,13 @@ import {
   Settings,
   Clock,
   CalendarRange,
+  TrendingUp,
+  Users2,
+  KanbanSquare,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+
+let savedScrollTop = 0
 
 const staffLinks = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -21,6 +27,12 @@ const staffLinks = [
   { to: '/team-calendar', label: 'Team Calendar', icon: CalendarRange },
   { to: '/claims/new', label: 'New Claim', icon: ReceiptText },
   { to: '/claims', label: 'My Claims', icon: FileStack },
+]
+
+const crmLinks = [
+  { to: '/crm', label: 'Pipeline', icon: TrendingUp, end: true },
+  { to: '/crm/board', label: 'Board', icon: KanbanSquare },
+  { to: '/crm/leads', label: 'Leads', icon: Users2 },
 ]
 
 const managerLinks = [
@@ -35,17 +47,41 @@ const adminLinks = [
 
 export default function Sidebar({ className = '' }) {
   const { profile, isManager, isAdmin } = useAuth()
+  const navRef = useRef(null)
+
+  useEffect(() => {
+    if (navRef.current) navRef.current.scrollTop = savedScrollTop
+  }, [])
 
   return (
     <aside className={`flex w-64 flex-col bg-ink-900 text-white shrink-0 h-full ${className}`}>
       <div className="px-5 py-6 border-b border-white/10">
         <p className="font-display text-lg font-semibold leading-tight">ALL 10S</p>
-        <p className="text-xs text-white/50 tracking-wide">Leave &amp; Claims</p>
+        <p className="text-xs text-white/50 tracking-wide">ERP</p>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+            <nav
+        ref={navRef}
+        onScroll={(e) => {
+          savedScrollTop = e.currentTarget.scrollTop
+        }}
+        className="flex-1 overflow-y-auto px-3 py-4 space-y-1"
+      >
         <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-white/40">Self-service</p>
         {staffLinks.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link')}
+          >
+            <Icon size={17} strokeWidth={2} />
+            {label}
+          </NavLink>
+        ))}
+
+        <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">CRM</p>
+        {crmLinks.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}

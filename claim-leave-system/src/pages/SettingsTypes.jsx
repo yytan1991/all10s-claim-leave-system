@@ -9,12 +9,13 @@ export default function SettingsTypes() {
   const [tab, setTab] = useState('leave')
 
   return (
-    <AppLayout title="Settings" subtitle="Configure leave types, claim types, and work locations.">
-      <div className="mb-6 flex gap-2 border-b border-sand-200">
+    <AppLayout title="Settings" subtitle="Configure leave types, claim types, work locations, and CRM pipeline.">
+      <div className="mb-6 flex gap-2 border-b border-sand-200 flex-wrap">
         {[
           { key: 'leave', label: 'Leave types' },
           { key: 'claim', label: 'Claim types' },
           { key: 'locations', label: 'Work locations' },
+          { key: 'stages', label: 'Pipeline stages' },
         ].map((t) => (
           <button
             key={t.key}
@@ -33,7 +34,140 @@ export default function SettingsTypes() {
       {tab === 'leave' && <TypeManager table="leave_types" hasAttachmentFlag />}
       {tab === 'claim' && <TypeManager table="claim_types" />}
       {tab === 'locations' && <LocationManager />}
+      {tab === 'stages' && <StageManager />}
     </AppLayout>
+  )
+}
+
+function StageManager() {
+  const [rows, setRows] = useState([])
+  const [name, setName] = useState('')
+  const [isWon, setIsWon] = useState(false)
+  const [isLost, setIsLost] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('crm_stages').select('*').order('sort_order')
+    setRows(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  async function addStage(e) {
+    e.preventDefault()
+    setError('')
+    if (!name.trim()) return
+    const nextOrder = rows.length > 0 ? Math.max(...rows.map((r) => r.sort_order)) + 1 : 1
+    const { error: insertError } = await supabase.from('crm_stages').insert({
+      name: name.trim(),
+      sort_order: nextOrder,
+      is_won: isWon,
+      is_lost: isLost,
+    })
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+    setName('')
+    setIsWon(false)
+    setIsLost(false)
+    load()
+  }
+
+  async function moveStage(id, direction) {
+    const index = rows.findIndex((r) => r.id === id)
+    const swapWith = direction === 'up' ? index - 1 : index + 1
+    if (swapWith < 0 || swapWith >= rows.length) return
+    const a = rows[index]
+    const b = rows[swapWith]
+    await Promise.all([
+      supabase.from('crm_stages').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('crm_stages').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ])
+    load()
+  }
+
+  async function removeStage(id) {
+    if (!confirm('Remove this stage? Leads on it will need to be moved manually.')) return
+    await supabase.from('crm_stages').delete().eq('id', id)
+    load()
+  }
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <form onSubmit={addStage} className="card p-5 space-y-4">
+        {error && <Alert tone="rose">{error}</Alert>}
+        <div>
+          <label className="field-label">Stage name</label>
+          <input
+            className="field-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Trial Scheduled"
+          />
+        </div>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm text-ink-700">
+            <input type="checkbox" checked={isWon} onChange={(e) => setIsWon(e.target.checked)} />
+            Marks a lead as won (closed)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink-700">
+            <input type="checkbox" checked={isLost} onChange={(e) => setIsLost(e.target.checked)} />
+            Marks a lead as lost (closed)
+          </label>
+        </div>
+        <button type="submit" className="btn-primary">
+          <Plus size={15} /> Add stage
+        </button>
+      </form>
+
+      <div className="card overflow-hidden">
+        {loading ? (
+          <p className="px-5 py-6 text-sm text-ink-500">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-ink-500">No pipeline stages configured yet.</p>
+        ) : (
+          <ul className="divide-y divide-sand-100">
+            {rows.map((r, i) => (
+              <li key={r.id} className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col -space-y-1">
+                    <button
+                      onClick={() => moveStage(r.id, 'up')}
+                      disabled={i === 0}
+                      className="text-ink-500 hover:text-ink-900 disabled:opacity-30"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => moveStage(r.id, 'down')}
+                      disabled={i === rows.length - 1}
+                      className="text-ink-500 hover:text-ink-900 disabled:opacity-30"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-ink-900">{r.name}</p>
+                    {(r.is_won || r.is_lost) && (
+                      <p className="text-xs text-ink-500">{r.is_won ? 'Won stage' : 'Lost stage'}</p>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => removeStage(r.id)} className="text-rose-500 hover:text-rose-600">
+                  <Trash2 size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
 

@@ -11,6 +11,11 @@ import SettingsTypes from './pages/SettingsTypes'
 import Attendance from './pages/Attendance'
 import AttendanceAdmin from './pages/AttendanceAdmin'
 import TeamCalendar from './pages/TeamCalendar'
+import CrmDashboard from './pages/CrmDashboard'
+import CrmPipelineBoard from './pages/CrmPipelineBoard'
+import CrmLeads from './pages/CrmLeads'
+import CrmLeadForm from './pages/CrmLeadForm'
+import CrmLeadDetail from './pages/CrmLeadDetail'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
@@ -79,6 +84,54 @@ export default function App() {
         element={
           <ProtectedRoute>
             <TeamCalendar />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm"
+        element={
+          <ProtectedRoute>
+            <CrmDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm/board"
+        element={
+          <ProtectedRoute>
+            <CrmPipelineBoard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm/leads"
+        element={
+          <ProtectedRoute>
+            <CrmLeads />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm/leads/new"
+        element={
+          <ProtectedRoute>
+            <CrmLeadForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm/leads/:id"
+        element={
+          <ProtectedRoute>
+            <CrmLeadDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm/leads/:id/edit"
+        element={
+          <ProtectedRoute>
+            <CrmLeadForm />
           </ProtectedRoute>
         }
       />

@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'ALL 10S EDU — Leave & Claims',
-        short_name: 'ALL 10S',
-        description: 'Clock in/out, apply for leave, and submit claims for ALL 10S EDU.',
+                name: 'ALL10S ERP',
+        short_name: 'ALL10S ERP',
+        description: 'Leave, claims, attendance, and CRM for ALL 10S EDU.',
         theme_color: '#12212B',
         background_color: '#FAF8F4',
         display: 'standalone',

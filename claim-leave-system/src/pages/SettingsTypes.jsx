@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, MapPin, LocateFixed } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
 import { getCurrentPosition } from '../lib/geo'
@@ -40,6 +41,7 @@ export default function SettingsTypes() {
 }
 
 function StageManager() {
+  const { profile } = useAuth()
   const [rows, setRows] = useState([])
   const [name, setName] = useState('')
   const [isWon, setIsWon] = useState(false)
@@ -49,14 +51,18 @@ function StageManager() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('crm_stages').select('*').order('sort_order')
+    const { data } = await supabase
+      .from('crm_stages')
+      .select('*')
+      .eq('org_id', profile.org_id)
+      .order('sort_order')
     setRows(data || [])
     setLoading(false)
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    if (profile) load()
+  }, [profile?.org_id])
 
   async function addStage(e) {
     e.preventDefault()
@@ -65,6 +71,7 @@ function StageManager() {
     const nextOrder = rows.length > 0 ? Math.max(...rows.map((r) => r.sort_order)) + 1 : 1
     const { error: insertError } = await supabase.from('crm_stages').insert({
       name: name.trim(),
+      org_id: profile.org_id,
       sort_order: nextOrder,
       is_won: isWon,
       is_lost: isLost,
@@ -172,6 +179,7 @@ function StageManager() {
 }
 
 function LocationManager() {
+  const { profile } = useAuth()
   const [rows, setRows] = useState([])
   const [name, setName] = useState('')
   const [latitude, setLatitude] = useState('')
@@ -183,14 +191,18 @@ function LocationManager() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('work_locations').select('*').order('name')
+    const { data } = await supabase
+      .from('work_locations')
+      .select('*')
+      .eq('org_id', profile.org_id)
+      .order('name')
     setRows(data || [])
     setLoading(false)
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    if (profile) load()
+  }, [profile?.org_id])
 
   async function useMyLocation() {
     setError('')
@@ -214,6 +226,7 @@ function LocationManager() {
     }
     const { error: insertError } = await supabase.from('work_locations').insert({
       name: name.trim(),
+      org_id: profile.org_id,
       latitude: Number(latitude),
       longitude: Number(longitude),
       radius_meters: Number(radius) || 50,
@@ -229,7 +242,7 @@ function LocationManager() {
     load()
   }
 
-    async function removeLocation(id) {
+  async function removeLocation(id) {
     if (!confirm('Remove this location? Staff will no longer be able to clock in from it.')) return
     setError('')
     const { error: deleteError } = await supabase.from('work_locations').delete().eq('id', id)
@@ -330,6 +343,7 @@ function LocationManager() {
 }
 
 function TypeManager({ table, hasAttachmentFlag }) {
+  const { profile } = useAuth()
   const [rows, setRows] = useState([])
   const [name, setName] = useState('')
   const [requiresAttachment, setRequiresAttachment] = useState(false)
@@ -338,22 +352,26 @@ function TypeManager({ table, hasAttachmentFlag }) {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from(table).select('*').order('name')
+    const { data } = await supabase
+      .from(table)
+      .select('*')
+      .eq('org_id', profile.org_id)
+      .order('name')
     setRows(data || [])
     setLoading(false)
   }
 
   useEffect(() => {
-    load()
-  }, [table])
+    if (profile) load()
+  }, [table, profile?.org_id])
 
   async function addType(e) {
     e.preventDefault()
     setError('')
     if (!name.trim()) return
     const payload = hasAttachmentFlag
-      ? { name: name.trim(), requires_attachment: requiresAttachment }
-      : { name: name.trim() }
+      ? { name: name.trim(), org_id: profile.org_id, requires_attachment: requiresAttachment }
+      : { name: name.trim(), org_id: profile.org_id }
     const { error: insertError } = await supabase.from(table).insert(payload)
     if (insertError) {
       setError(insertError.message)

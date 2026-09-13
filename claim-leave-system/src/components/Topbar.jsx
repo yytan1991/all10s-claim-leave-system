@@ -1,9 +1,9 @@
-import { LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu, Building2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { initials } from '../lib/helpers'
 
 export default function Topbar({ title, subtitle, onMenuClick, showMenuButton = true }) {
-  const { profile, signOut } = useAuth()
+  const { profile, memberships, switchCompany, signOut } = useAuth()
 
   return (
     <header className="flex items-center justify-between border-b border-sand-200 bg-white px-5 py-4 md:px-8">
@@ -24,6 +24,12 @@ export default function Topbar({ title, subtitle, onMenuClick, showMenuButton = 
       </div>
 
       <div className="flex items-center gap-3">
+        {memberships.length > 1 && (
+          <button onClick={switchCompany} className="btn-secondary text-sm hidden sm:inline-flex" title="Switch company">
+            <Building2 size={15} />
+            <span className="hidden md:inline">{profile?.organizations?.name}</span>
+          </button>
+        )}
         <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-sm font-semibold">
           {initials(profile?.full_name)}
         </div>

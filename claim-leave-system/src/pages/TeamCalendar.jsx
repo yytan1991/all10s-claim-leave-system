@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, CalendarRange } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { EmptyState } from '../components/UI'
 import { getMonthGrid, toISODate } from '../lib/helpers'
@@ -8,6 +9,7 @@ import { getMonthGrid, toISODate } from '../lib/helpers'
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function TeamCalendar() {
+  const { profile } = useAuth()
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [monthIndex, setMonthIndex] = useState(today.getMonth())
@@ -20,16 +22,17 @@ export default function TeamCalendar() {
   const rangeEnd = weeks[weeks.length - 1][6]
 
   useEffect(() => {
-    load()
+    if (profile) load()
     setSelectedDate(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, monthIndex])
+  }, [year, monthIndex, profile?.org_id])
 
   async function load() {
     setLoading(true)
     const { data, error } = await supabase.rpc('get_team_leave', {
       range_start: toISODate(rangeStart),
       range_end: toISODate(rangeEnd),
+      p_org_id: profile.org_id,
     })
     if (error) {
       // eslint-disable-next-line no-console

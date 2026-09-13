@@ -45,10 +45,11 @@ export default function CrmLeadForm() {
   })
 
   useEffect(() => {
+    if (!profile) return
     async function load() {
       const [{ data: stageData }, { data: staffData }] = await Promise.all([
-        supabase.from('crm_stages').select('*').order('sort_order'),
-        supabase.from('profiles').select('id, full_name').order('full_name'),
+        supabase.from('crm_stages').select('*').eq('org_id', profile.org_id).order('sort_order'),
+        supabase.from('profiles').select('id, full_name').eq('org_id', profile.org_id).order('full_name'),
       ])
       setStages(stageData || [])
       setStaff(staffData || [])
@@ -89,7 +90,7 @@ export default function CrmLeadForm() {
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, profile?.org_id])
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -122,7 +123,7 @@ export default function CrmLeadForm() {
     } else {
       const { error: insertError } = await supabase
         .from('crm_contacts')
-        .insert({ ...payload, created_by: profile.id })
+        .insert({ ...payload, org_id: profile.org_id, created_by: profile.id })
       resultError = insertError
     }
 

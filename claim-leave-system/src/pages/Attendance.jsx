@@ -29,7 +29,7 @@ export default function Attendance() {
   async function load() {
     setLoading(true)
     const [{ data: locs }, { data: todayRow }, { data: hist }] = await Promise.all([
-      supabase.from('work_locations').select('*'),
+      supabase.from('work_locations').select('*').eq('org_id', profile.org_id),
       supabase
         .from('attendance_records')
         .select('*')
@@ -76,6 +76,7 @@ export default function Attendance() {
         .from('attendance_records')
         .insert({
           profile_id: profile.id,
+          org_id: profile.org_id,
           work_location_id: location.id,
           date: todayStr(),
           clock_in_at: now,

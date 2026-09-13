@@ -17,6 +17,9 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
+// Each page mounts its own copy of the sidebar, so without this the nav
+// scroll position would reset to the top on every navigation. This module-
+// level variable survives across those remounts.
 let savedScrollTop = 0
 
 const staffLinks = [
@@ -60,7 +63,7 @@ export default function Sidebar({ className = '' }) {
         <p className="text-xs text-white/50 tracking-wide">ERP</p>
       </div>
 
-            <nav
+      <nav
         ref={navRef}
         onScroll={(e) => {
           savedScrollTop = e.currentTarget.scrollTop

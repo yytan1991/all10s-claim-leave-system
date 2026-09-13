@@ -19,15 +19,17 @@ export default function ClaimApply() {
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
+    if (!profile) return
     supabase
       .from('claim_types')
       .select('*')
+      .eq('org_id', profile.org_id)
       .order('name')
       .then(({ data }) => {
         setClaimTypes(data || [])
         if (data?.length) setClaimTypeId(data[0].id)
       })
-  }, [])
+  }, [profile?.org_id])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -57,6 +59,7 @@ export default function ClaimApply() {
 
     const { error: insertError } = await supabase.from('claims').insert({
       profile_id: profile.id,
+      org_id: profile.org_id,
       claim_type_id: claimTypeId,
       claim_date: claimDate,
       amount: Number(amount),

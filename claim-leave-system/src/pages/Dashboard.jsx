@@ -56,10 +56,12 @@ export default function Dashboard() {
         const { count: leaveCount } = await supabase
           .from('leave_applications')
           .select('id', { count: 'exact', head: true })
+          .eq('org_id', profile.org_id)
           .eq('status', 'pending')
         const { count: claimCount } = await supabase
           .from('claims')
           .select('id', { count: 'exact', head: true })
+          .eq('org_id', profile.org_id)
           .eq('status', 'pending')
         setPendingApprovals((leaveCount || 0) + (claimCount || 0))
       }

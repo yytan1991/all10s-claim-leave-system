@@ -24,10 +24,12 @@ export default function Approvals() {
       supabase
         .from('leave_applications')
         .select('*, leave_types(name), profiles!leave_applications_profile_id_fkey(full_name, department)')
+        .eq('org_id', profile.org_id)
         .order('created_at', { ascending: false }),
       supabase
         .from('claims')
         .select('*, claim_types(name), profiles!claims_profile_id_fkey(full_name, department)')
+        .eq('org_id', profile.org_id)
         .order('created_at', { ascending: false }),
     ])
     if (leaveError) console.error('Leave fetch error:', leaveError)
@@ -38,8 +40,8 @@ export default function Approvals() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (profile) loadData()
+  }, [profile?.org_id])
 
   async function decide(table, id, status) {
     await supabase

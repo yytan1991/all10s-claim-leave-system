@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { Download, Clock, Pencil, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
 import {
@@ -29,6 +30,7 @@ function currentMonthStr() {
 }
 
 export default function AttendanceAdmin() {
+  const { profile: adminProfile } = useAuth()
   const [tab, setTab] = useState('daily')
   const [date, setDate] = useState(todayStr())
   const [month, setMonth] = useState(currentMonthStr())
@@ -41,17 +43,20 @@ export default function AttendanceAdmin() {
   const [editingEntry, setEditingEntry] = useState(null)
 
   useEffect(() => {
+    if (!adminProfile) return
     supabase
       .from('profiles')
       .select('id, full_name, department, work_start_time, work_end_time')
+      .eq('org_id', adminProfile.org_id)
       .order('full_name')
       .then(({ data }) => setProfiles(data || []))
     supabase
       .from('work_locations')
       .select('*')
+      .eq('org_id', adminProfile.org_id)
       .order('name')
       .then(({ data }) => setLocations(data || []))
-  }, [])
+  }, [adminProfile?.org_id])
 
   useEffect(() => {
     if (profiles.length === 0) return
@@ -64,6 +69,7 @@ export default function AttendanceAdmin() {
     const { data } = await supabase
       .from('attendance_records')
       .select('*, work_locations(name)')
+      .eq('org_id', adminProfile.org_id)
       .eq('date', date)
     const byProfile = {}
     ;(data || []).forEach((r) => {
@@ -84,6 +90,7 @@ export default function AttendanceAdmin() {
     const { data } = await supabase
       .from('attendance_records')
       .select('*')
+      .eq('org_id', adminProfile.org_id)
       .gte('date', start)
       .lt('date', end)
 
@@ -351,6 +358,7 @@ function DailyTable({ rows, onEdit }) {
 }
 
 function ManualEntryModal({ profile, record, date, profiles, locations, onClose, onSaved }) {
+  const { profile: adminProfile } = useAuth()
   const [profileId, setProfileId] = useState(profile?.id || record?.profile_id || '')
   const [entryDate, setEntryDate] = useState(record?.date || date)
   const [clockInTime, setClockInTime] = useState(record?.clock_in_at ? toTimeInput(record.clock_in_at) : '')
@@ -396,6 +404,7 @@ function ManualEntryModal({ profile, record, date, profiles, locations, onClose,
     const { error: upsertError } = await supabase.from('attendance_records').upsert(
       {
         profile_id: profileId,
+        org_id: adminProfile.org_id,
         date: entryDate,
         clock_in_at: clockInISO,
         clock_out_at: clockOutISO,

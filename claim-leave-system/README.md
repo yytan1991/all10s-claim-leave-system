@@ -1,9 +1,9 @@
-# ALL 10S EDU — Claim & Leave Management System
+# ALL10S ERP
 
-A staff self-service leave and expense-claim system, styled after Kakitangan's
-e-Leave / e-Claim modules: a dark sidebar, card-based dashboard, status pills
-(Pending / Approved / Rejected), and simple submit-and-track forms with
-receipt/document uploads.
+A staff self-service leave/claim/attendance system plus a sales CRM, merged
+into one app with one login. Styled after Kakitangan's e-Leave / e-Claim
+modules: a dark sidebar, card-based dashboard, status pills, and simple
+submit-and-track forms with receipt/document uploads.
 
 Built with React + Vite + Supabase (same stack as Edulook).
 
@@ -18,6 +18,18 @@ Built with React + Vite + Supabase (same stack as Edulook).
   - Team calendar: a month view showing who's approved or pending for leave,
     without exposing anyone's reason or attachments
   - Dashboard with leave balance per type and recent activity
+- **CRM (sales pipeline)** — same login, visible to everyone
+  - Track parent/student leads: contact info, student details, school,
+    service interested, lead source
+  - Configurable pipeline stages (Settings → Pipeline stages), with Won/Lost
+    flags for win-rate reporting
+  - Each lead can be assigned a PIC (person in charge) — a PIC always sees
+    their own leads; managers/admins see everyone's
+  - Follow-up history log per lead (not just one deadline — every contact
+    attempt is recorded with date + notes)
+  - Sales pipeline dashboard: counts per stage, win rate, closed-won trend
+    over the last 6 months
+  - Excel import (bring in leads from a spreadsheet) and export
 - **Manager / Admin**
   - Approvals inbox: review and approve/reject leave & claims across the team
   - Attendance Log: daily clock-in/out log (late arrivals flagged in red) and
@@ -31,7 +43,7 @@ Built with React + Vite + Supabase (same stack as Edulook).
     after their start time is automatically flagged late
   - Add/remove work locations (name, GPS coordinates, check-in radius) staff
     must be within to clock in or out
-  - Configure leave types and claim types (add/remove, mark attachment-required)
+  - Configure leave types, claim types, and CRM pipeline stages
 
 ## 1. Set up Supabase
 
@@ -44,21 +56,49 @@ Built with React + Vite + Supabase (same stack as Edulook).
 4. Then run `supabase/migration_3_team_calendar.sql` — this adds a
    privacy-safe function so every staff member can see the team leave
    calendar without seeing each other's private reason/attachment fields.
-5. Under **Authentication → Providers**, keep Email enabled. Invite your staff
+5. Then run `supabase/migration_4_crm.sql` — this adds the CRM tables
+   (contacts, follow-up history, pipeline stages) and seeds a starter
+   pipeline (New Lead → Contacted → Trial Scheduled → Trial Completed →
+   Proposal Sent → Closed Won / Closed Lost). Edit these anytime in
+   **Settings → Pipeline stages**.
+6. Under **Authentication → Providers**, keep Email enabled. Invite your staff
    under **Authentication → Users → Invite user** (or let them sign up if you
    enable that instead) — a `profiles` row is created automatically for every
    new auth user, defaulting to the `staff` role.
-6. Promote your own account to admin so you can manage the system:
+7. Promote your own account to admin so you can manage the system:
    ```sql
    update profiles set role = 'admin' where email = 'your-email@example.com';
    ```
-7. Add your centre as a work location — either through **Settings → Work
+8. Add your centre as a work location — either through **Settings → Work
    locations** in the app once you're logged in (use the "Use my current
    location" button while standing at the centre), or directly via SQL:
    ```sql
    insert into work_locations (name, latitude, longitude, radius_meters)
    values ('ALL 10S EDU Cheras Centre', 3.0738, 101.7370, 50);
    ```
+
+## Bringing over your existing CRM data
+
+Your old standalone CRM lives on a separate Supabase project, so the
+straightforward path is exporting and re-importing:
+
+1. In your **old** CRM, use its existing Excel export feature to download
+   all current leads.
+2. In this app, go to **CRM → Leads → Import Excel** and upload that file.
+   The importer recognizes columns named `Parent Name`, `Parent Contact`,
+   `Student Name`, `Student Year`, `School`, `Service Interested` (or
+   `Service`), `Lead Source` (or `Source`), `Stage`, `PIC`, `First Contact`,
+   `Next Follow-up`, and `Notes` — only `Parent Name` is required, everything
+   else is optional per row.
+3. `Stage` and `PIC` are matched by name (case-insensitive) against your
+   pipeline stages and staff list — make sure stage names in the spreadsheet
+   match what's in **Settings → Pipeline stages** first, and PIC names match
+   staff full names, so rows land in the right place.
+4. Rows that don't match an existing stage default to your first pipeline
+   stage; rows with no matching PIC default to whoever is doing the import.
+5. Follow-up history isn't part of the standard export — if that matters,
+   add key follow-up notes manually on each lead afterward, or ask to extend
+   the importer for a "Follow-ups" sheet.
 
 ## 2. Configure the app
 
@@ -107,7 +147,7 @@ desktop browser; nothing changes there.
 Once installed, logging in and clocking in/out works exactly the same as in
 the browser — it's the same app, just presented like a native one. On phone
 screens, the bottom tab bar (Home / Attendance / Leave / Claims / More)
-replaces the sidebar; "More" opens the rest (Team Calendar, Approvals,
+replaces the sidebar; "More" opens the rest (CRM, Team Calendar, Approvals,
 Employees, Settings — whichever your role can see).
 
 ## Rebranding the app icon
@@ -121,12 +161,15 @@ npm run generate-icons
 
 ## Notes on roles
 
-- **staff** — can apply for leave/claims and see only their own records.
+- **staff** — can apply for leave/claims and see only their own HR records.
+  In the CRM, a staff member sees only leads where they're the assigned PIC.
 - **manager** — everything staff can do, plus the Approvals inbox (sees the
   whole team, not just direct reports — adjust the RLS policy in
-  `schema.sql` if you need manager-scoped visibility later).
+  `schema.sql` if you need manager-scoped visibility later), and sees every
+  CRM lead regardless of PIC.
 - **admin** — everything manager can do, plus Employees (role & leave
-  balance management) and Settings (leave/claim type configuration).
+  balance management) and Settings (leave/claim types, work locations,
+  pipeline stages).
 
 ## Extending
 
@@ -135,3 +178,6 @@ npm run generate-icons
 - **Email notifications**: add a Supabase Edge Function triggered on
   insert/update to email the requester and approver (Kakitangan does this on
   every status change) — not built yet, ask any time to add it.
+- **CRM follow-up reminders**: a scheduled Edge Function could email/notify
+  a PIC when their lead's next follow-up date arrives.
+

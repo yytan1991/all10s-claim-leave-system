@@ -20,15 +20,17 @@ export default function LeaveApply() {
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
+    if (!profile) return
     supabase
       .from('leave_types')
       .select('*')
+      .eq('org_id', profile.org_id)
       .order('name')
       .then(({ data }) => {
         setLeaveTypes(data || [])
         if (data?.length) setLeaveTypeId(data[0].id)
       })
-  }, [])
+  }, [profile?.org_id])
 
   const days = countWorkingDays(startDate, endDate)
   const selectedType = leaveTypes.find((t) => t.id === leaveTypeId)
@@ -69,6 +71,7 @@ export default function LeaveApply() {
 
     const { error: insertError } = await supabase.from('leave_applications').insert({
       profile_id: profile.id,
+      org_id: profile.org_id,
       leave_type_id: leaveTypeId,
       start_date: startDate,
       end_date: endDate,

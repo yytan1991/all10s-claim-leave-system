@@ -16,6 +16,8 @@ import CrmPipelineBoard from './pages/CrmPipelineBoard'
 import CrmLeads from './pages/CrmLeads'
 import CrmLeadForm from './pages/CrmLeadForm'
 import CrmLeadDetail from './pages/CrmLeadDetail'
+import SuperadminOrganizations from './pages/SuperadminOrganizations'
+import SuperadminUsers from './pages/SuperadminUsers'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
@@ -156,6 +158,22 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <SettingsTypes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/superadmin"
+        element={
+          <ProtectedRoute requireSuperadmin>
+            <SuperadminOrganizations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/superadmin/users"
+        element={
+          <ProtectedRoute requireSuperadmin>
+            <SuperadminUsers />
           </ProtectedRoute>
         }
       />

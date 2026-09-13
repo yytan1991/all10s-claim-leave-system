@@ -1,22 +1,29 @@
 import { useEffect, useState } from 'react'
-import { Users, X, Clock } from 'lucide-react'
+import { Users, X, Clock, UserPlus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { EmptyState, Alert } from '../components/UI'
 
 export default function Employees() {
+  const { profile } = useAuth()
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [editingHours, setEditingHours] = useState(null)
+  const [addingExisting, setAddingExisting] = useState(false)
 
   useEffect(() => {
-    loadEmployees()
-  }, [])
+    if (profile) loadEmployees()
+  }, [profile?.org_id])
 
   async function loadEmployees() {
     setLoading(true)
-    const { data } = await supabase.from('profiles').select('*').order('full_name')
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('org_id', profile.org_id)
+      .order('full_name')
     setEmployees(data || [])
     setLoading(false)
   }
@@ -28,6 +35,12 @@ export default function Employees() {
 
   return (
     <AppLayout title="Employees" subtitle="Manage staff roles and leave entitlements.">
+      <div className="flex justify-end mb-4">
+        <button onClick={() => setAddingExisting(true)} className="btn-secondary text-sm">
+          <UserPlus size={15} /> Add existing staff member
+        </button>
+      </div>
+
       {loading ? (
         <p className="text-sm text-ink-500">Loading…</p>
       ) : employees.length === 0 ? (
@@ -103,7 +116,126 @@ export default function Employees() {
           }}
         />
       )}
+      {addingExisting && (
+        <AddExistingStaffModal
+          orgId={profile.org_id}
+          onClose={() => setAddingExisting(false)}
+          onSaved={() => {
+            setAddingExisting(false)
+            loadEmployees()
+          }}
+        />
+      )}
     </AppLayout>
+  )
+}
+
+function AddExistingStaffModal({ orgId, onClose, onSaved }) {
+  const [email, setEmail] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [role, setRole] = useState('staff')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setError('')
+    if (!email.trim() || !fullName.trim()) {
+      setError('Enter both their email and full name.')
+      return
+    }
+    setSaving(true)
+
+    const { data: foundUserId, error: lookupError } = await supabase.rpc('find_user_id_by_email', {
+      p_email: email.trim(),
+    })
+
+    if (lookupError) {
+      setSaving(false)
+      setError(lookupError.message)
+      return
+    }
+    if (!foundUserId) {
+      setSaving(false)
+      setError(
+        "No existing login found with that email. If they're brand new, invite them instead from Supabase (Authentication \u2192 Users \u2192 Invite user)."
+      )
+      return
+    }
+
+    const { error: insertError } = await supabase.from('profiles').insert({
+      id: crypto.randomUUID(),
+      user_id: foundUserId,
+      full_name: fullName.trim(),
+      email: email.trim(),
+      org_id: orgId,
+      role,
+    })
+
+    setSaving(false)
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="card w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">Add existing staff member</h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="text-xs text-ink-500 mb-4">
+          Use this for someone who already has a login at another branch/company and now also
+          needs access here. They'll be able to switch between both after signing in.
+        </p>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          {error && <Alert tone="rose">{error}</Alert>}
+
+          <div>
+            <label className="field-label">Their email (existing login)</label>
+            <input
+              type="email"
+              className="field-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+            />
+          </div>
+          <div>
+            <label className="field-label">Full name</label>
+            <input
+              className="field-input"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="field-label">Role at this organization</label>
+            <select className="field-input" value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="staff">Staff</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Adding…' : 'Add to organization'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 
@@ -194,7 +326,11 @@ function LeaveBalanceModal({ employee, onClose }) {
 
   useEffect(() => {
     async function load() {
-      const { data: types } = await supabase.from('leave_types').select('*').order('name')
+      const { data: types } = await supabase
+        .from('leave_types')
+        .select('*')
+        .eq('org_id', employee.org_id)
+        .order('name')
       setLeaveTypes(types || [])
       const { data: existing } = await supabase
         .from('leave_balances')
@@ -222,6 +358,7 @@ function LeaveBalanceModal({ employee, onClose }) {
     setError('')
     const rows = leaveTypes.map((t) => ({
       profile_id: employee.id,
+      org_id: employee.org_id,
       leave_type_id: t.id,
       year,
       entitled_days: Number(balances[t.id]?.entitled_days || 0),

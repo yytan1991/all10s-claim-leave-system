@@ -23,9 +23,9 @@ export default function CrmLeadDetail() {
   const [savingNote, setSavingNote] = useState(false)
 
   useEffect(() => {
-    load()
+    if (profile) load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, profile?.org_id])
 
   async function load() {
     setLoading(true)
@@ -36,7 +36,7 @@ export default function CrmLeadDetail() {
           .select('*, crm_stages(name, is_won, is_lost), profiles!crm_contacts_pic_id_fkey(full_name)')
           .eq('id', id)
           .single(),
-        supabase.from('crm_stages').select('*').order('sort_order'),
+        supabase.from('crm_stages').select('*').eq('org_id', profile.org_id).order('sort_order'),
         supabase
           .from('crm_followups')
           .select('*, profiles(full_name)')
@@ -61,6 +61,7 @@ export default function CrmLeadDetail() {
     setSavingNote(true)
     const { error: insertError } = await supabase.from('crm_followups').insert({
       contact_id: id,
+      org_id: profile.org_id,
       followup_date: newDate,
       notes: newNote.trim(),
       created_by: profile.id,

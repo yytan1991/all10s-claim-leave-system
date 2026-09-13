@@ -72,16 +72,20 @@ export function formatDateWithDay(dateStr) {
   })
 }
 
+// Decimal hours as a plain number string (e.g. "8.50"), handy for payroll
+// spreadsheets that multiply hours by an hourly rate.
 export function formatHoursDecimal(hoursDecimal) {
   if (hoursDecimal == null) return ''
   return hoursDecimal.toFixed(2)
 }
 
+// Length of the lunch break in hours, or 0 if not (fully) logged.
 export function lunchHours(record) {
   if (!record?.lunch_start_at || !record?.lunch_end_at) return 0
   return hoursBetween(record.lunch_start_at, record.lunch_end_at) || 0
 }
 
+// Hours actually worked = clock-in to clock-out, minus the lunch break.
 export function netHoursWorked(record) {
   const gross = hoursBetween(record?.clock_in_at, record?.clock_out_at)
   if (gross == null) return null

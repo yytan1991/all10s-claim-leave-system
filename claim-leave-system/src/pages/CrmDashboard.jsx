@@ -2,24 +2,29 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Users2, TrendingUp, CircleCheck, CircleX } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { StatCard } from '../components/UI'
 import { stagePillClass } from '../lib/helpers'
 
 export default function CrmDashboard() {
+  const { profile } = useAuth()
   const [stages, setStages] = useState([])
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    load()
-  }, [])
+    if (profile) load()
+  }, [profile?.org_id])
 
   async function load() {
     setLoading(true)
     const [{ data: stageData }, { data: contactData }] = await Promise.all([
-      supabase.from('crm_stages').select('*').order('sort_order'),
-      supabase.from('crm_contacts').select('id, stage_id, updated_at, crm_stages(name, is_won, is_lost)'),
+      supabase.from('crm_stages').select('*').eq('org_id', profile.org_id).order('sort_order'),
+      supabase
+        .from('crm_contacts')
+        .select('id, stage_id, updated_at, crm_stages(name, is_won, is_lost)')
+        .eq('org_id', profile.org_id),
     ])
     setStages(stageData || [])
     setContacts(contactData || [])

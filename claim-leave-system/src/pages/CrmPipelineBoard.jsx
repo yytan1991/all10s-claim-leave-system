@@ -2,26 +2,29 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { formatDate, initials, isOverdue } from '../lib/helpers'
 
 export default function CrmPipelineBoard() {
+  const { profile } = useAuth()
   const [stages, setStages] = useState([])
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [dragOverStage, setDragOverStage] = useState(null)
 
   useEffect(() => {
-    load()
-  }, [])
+    if (profile) load()
+  }, [profile?.org_id])
 
   async function load() {
     setLoading(true)
     const [{ data: stageData }, { data: contactData }] = await Promise.all([
-      supabase.from('crm_stages').select('*').order('sort_order'),
+      supabase.from('crm_stages').select('*').eq('org_id', profile.org_id).order('sort_order'),
       supabase
         .from('crm_contacts')
-        .select('id, parent_name, student_name, stage_id, next_followup_date, profiles!crm_contacts_pic_id_fkey(full_name)'),
+        .select('id, parent_name, student_name, stage_id, next_followup_date, profiles!crm_contacts_pic_id_fkey(full_name)')
+        .eq('org_id', profile.org_id),
     ])
     setStages(stageData || [])
     setContacts(contactData || [])

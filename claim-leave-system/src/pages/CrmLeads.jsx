@@ -22,17 +22,18 @@ export default function CrmLeads() {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    load()
-  }, [])
+    if (profile) load()
+  }, [profile?.org_id])
 
   async function load() {
     setLoading(true)
     const [{ data: stageData }, { data: staffData }, { data: contactData }] = await Promise.all([
-      supabase.from('crm_stages').select('*').order('sort_order'),
-      supabase.from('profiles').select('id, full_name').order('full_name'),
+      supabase.from('crm_stages').select('*').eq('org_id', profile.org_id).order('sort_order'),
+      supabase.from('profiles').select('id, full_name').eq('org_id', profile.org_id).order('full_name'),
       supabase
         .from('crm_contacts')
         .select('*, crm_stages(name, is_won, is_lost), profiles!crm_contacts_pic_id_fkey(full_name)')
+        .eq('org_id', profile.org_id)
         .order('next_followup_date', { ascending: true, nullsFirst: false }),
     ])
     setStages(stageData || [])
@@ -110,6 +111,7 @@ export default function CrmLeads() {
           if (!parentName) return null
           return {
             parent_name: String(parentName),
+            org_id: profile.org_id,
             parent_contact: r['Parent Contact'] || r['Contact'] || null,
             student_name: r['Student Name'] || null,
             student_year: r['Student Year'] ? String(r['Student Year']) : null,

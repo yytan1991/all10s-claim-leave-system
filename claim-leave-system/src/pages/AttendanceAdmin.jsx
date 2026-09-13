@@ -36,6 +36,7 @@ export default function AttendanceAdmin() {
   const [locations, setLocations] = useState([])
   const [dailyRows, setDailyRows] = useState([])
   const [monthlyRows, setMonthlyRows] = useState([])
+  const [monthlyRawRecords, setMonthlyRawRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingEntry, setEditingEntry] = useState(null)
 
@@ -86,6 +87,8 @@ export default function AttendanceAdmin() {
       .gte('date', start)
       .lt('date', end)
 
+    setMonthlyRawRecords(data || [])
+
     const summary = {}
     profiles.forEach((p) => {
       summary[p.id] = { profile: p, daysPresent: 0, daysLate: 0, totalHours: 0 }
@@ -122,16 +125,81 @@ export default function AttendanceAdmin() {
   }
 
   function exportMonthly() {
-    const rows = monthlyRows.map((s) => ({
-      Name: s.profile.full_name,
-      Department: s.profile.department || '',
-      Month: month,
-      'Days Present': s.daysPresent,
-      'Days Late': s.daysLate,
-      'Total Hours Worked (hrs)': formatHoursDecimal(s.totalHours),
-      'Total Hours Worked (h:mm)': formatHours(s.totalHours),
-    }))
-    downloadXlsx(rows, `attendance-monthly-${month}.xlsx`)
+    const wb = XLSX.utils.book_new()
+
+    // Lookup: profile_id -> { "YYYY-MM-DD" -> record }
+    const byProfileDate = {}
+    monthlyRawRecords.forEach((r) => {
+      if (!byProfileDate[r.profile_id]) byProfileDate[r.profile_id] = {}
+      byProfileDate[r.profile_id][r.date] = r
+    })
+
+    // Every calendar date in the selected month
+    const [y, m] = month.split('-').map(Number)
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const allDates = Array.from({ length: daysInMonth }, (_, i) => toISODate(new Date(y, m - 1, i + 1)))
+
+    // ---------- Team Summary sheet: one row per staff, one column per date ----------
+    const teamHeader = ['Name', 'Department', ...allDates.map((d) => formatDate(d)), 'Total Hours']
+    const teamRows = [teamHeader]
+    profiles.forEach((p) => {
+      const row = [p.full_name, p.department || '']
+      let total = 0
+      allDates.forEach((d) => {
+        const rec = byProfileDate[p.id]?.[d]
+        const net = rec ? netHoursWorked(rec) : null
+        if (net) total += net
+        row.push(net != null ? Number(net.toFixed(2)) : '-')
+      })
+      row.push(Number(total.toFixed(2)))
+      teamRows.push(row)
+    })
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(teamRows), 'Team Summary')
+
+    // ---------- One detail sheet per staff member ----------
+    const usedNames = new Set()
+    profiles.forEach((p) => {
+      const rows = [
+        ['Monthly Timesheet', '', '', '', '', '', 'ALL10S ERP'],
+        [],
+        ['Month', `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`],
+        [],
+        ['Member', p.full_name],
+        ['Department', p.department || ''],
+        [],
+        ['DATE', 'DAY', 'CLOCK IN', 'CLOCK OUT', 'LUNCH START', 'LUNCH END', 'HOURS WORKED', 'LATE'],
+      ]
+      let total = 0
+      allDates.forEach((d) => {
+        const rec = byProfileDate[p.id]?.[d]
+        if (!rec) return
+        const net = netHoursWorked(rec) || 0
+        total += net
+        rows.push([
+          formatDate(d),
+          new Date(d).toLocaleDateString('en-MY', { weekday: 'long' }),
+          rec.clock_in_at ? formatTime(rec.clock_in_at) : '',
+          rec.clock_out_at ? formatTime(rec.clock_out_at) : '',
+          rec.lunch_start_at ? formatTime(rec.lunch_start_at) : '',
+          rec.lunch_end_at ? formatTime(rec.lunch_end_at) : '',
+          Number(net.toFixed(2)),
+          rec.is_late ? 'Yes' : 'No',
+        ])
+      })
+      rows.push(['', '', '', '', '', 'Total Hours', Number(total.toFixed(2)), ''])
+
+      let sheetName = p.full_name.replace(/[\\/*?:[\]]/g, '').slice(0, 28) || 'Staff'
+      let suffix = 2
+      while (usedNames.has(sheetName)) {
+        sheetName = `${p.full_name.slice(0, 24)} (${suffix})`
+        suffix += 1
+      }
+      usedNames.add(sheetName)
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), sheetName)
+    })
+
+    XLSX.writeFile(wb, `attendance-monthly-${month}.xlsx`)
   }
 
   function downloadXlsx(rows, filename) {

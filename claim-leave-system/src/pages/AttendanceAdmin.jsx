@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Download, Clock } from 'lucide-react'
+import { Download, Clock, Pencil, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import AppLayout from '../components/AppLayout'
-import { EmptyState } from '../components/UI'
-import { formatDate, formatTime, formatHours, hoursBetween, toISODate } from '../lib/helpers'
+import { Alert, EmptyState } from '../components/UI'
+import {
+  formatDate,
+  formatDateWithDay,
+  formatTime,
+  formatHours,
+  formatHoursDecimal,
+  netHoursWorked,
+  lunchHours,
+  toISODate,
+  isLateClockIn,
+} from '../lib/helpers'
 
 const TABS = [
   { key: 'daily', label: 'Daily log' },
@@ -23,9 +33,11 @@ export default function AttendanceAdmin() {
   const [date, setDate] = useState(todayStr())
   const [month, setMonth] = useState(currentMonthStr())
   const [profiles, setProfiles] = useState([])
+  const [locations, setLocations] = useState([])
   const [dailyRows, setDailyRows] = useState([])
   const [monthlyRows, setMonthlyRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editingEntry, setEditingEntry] = useState(null)
 
   useEffect(() => {
     supabase
@@ -33,6 +45,11 @@ export default function AttendanceAdmin() {
       .select('id, full_name, department, work_start_time, work_end_time')
       .order('full_name')
       .then(({ data }) => setProfiles(data || []))
+    supabase
+      .from('work_locations')
+      .select('*')
+      .order('name')
+      .then(({ data }) => setLocations(data || []))
   }, [])
 
   useEffect(() => {
@@ -78,8 +95,8 @@ export default function AttendanceAdmin() {
       if (!s) return
       s.daysPresent += 1
       if (r.is_late) s.daysLate += 1
-      const hrs = hoursBetween(r.clock_in_at, r.clock_out_at)
-      if (hrs) s.totalHours += hrs
+      const net = netHoursWorked(r)
+      if (net) s.totalHours += net
     })
     setMonthlyRows(Object.values(summary))
     setLoading(false)
@@ -89,12 +106,17 @@ export default function AttendanceAdmin() {
     const rows = dailyRows.map(({ profile, record }) => ({
       Name: profile.full_name,
       Department: profile.department || '',
-      Date: date,
+      Date: formatDateWithDay(date),
       'Clock In': record?.clock_in_at ? formatTime(record.clock_in_at) : '',
       'Clock Out': record?.clock_out_at ? formatTime(record.clock_out_at) : '',
-      'Hours Worked': record ? (hoursBetween(record.clock_in_at, record.clock_out_at) || 0).toFixed(2) : '',
+      'Lunch Start': record?.lunch_start_at ? formatTime(record.lunch_start_at) : '',
+      'Lunch End': record?.lunch_end_at ? formatTime(record.lunch_end_at) : '',
+      'Lunch Duration (hrs)': record ? formatHoursDecimal(lunchHours(record)) : '',
+      'Hours Worked (hrs)': record ? formatHoursDecimal(netHoursWorked(record) || 0) : '',
+      'Hours Worked (h:mm)': record ? formatHours(netHoursWorked(record)) : '',
       Late: record?.is_late ? 'Yes' : record ? 'No' : '',
       Status: record ? 'Present' : 'Not clocked in',
+      Location: record?.work_locations?.name || '',
     }))
     downloadXlsx(rows, `attendance-daily-${date}.xlsx`)
   }
@@ -106,7 +128,8 @@ export default function AttendanceAdmin() {
       Month: month,
       'Days Present': s.daysPresent,
       'Days Late': s.daysLate,
-      'Total Hours Worked': s.totalHours.toFixed(2),
+      'Total Hours Worked (hrs)': formatHoursDecimal(s.totalHours),
+      'Total Hours Worked (h:mm)': formatHours(s.totalHours),
     }))
     downloadXlsx(rows, `attendance-monthly-${month}.xlsx`)
   }
@@ -159,36 +182,62 @@ export default function AttendanceAdmin() {
           >
             <Download size={15} /> Export to Excel
           </button>
+          {tab === 'daily' && (
+            <button onClick={() => setEditingEntry({ profile: null, record: null })} className="btn-primary">
+              <Pencil size={15} /> Manual entry
+            </button>
+          )}
         </div>
       </div>
+
+      {tab === 'daily' && (
+        <p className="text-sm text-ink-500 mb-4">{formatDateWithDay(date)}</p>
+      )}
 
       {loading ? (
         <p className="text-sm text-ink-500">Loading…</p>
       ) : tab === 'daily' ? (
-        <DailyTable rows={dailyRows} />
+        <DailyTable rows={dailyRows} onEdit={(profile, record) => setEditingEntry({ profile, record })} />
       ) : (
         <MonthlyTable rows={monthlyRows} />
+      )}
+
+      {editingEntry && (
+        <ManualEntryModal
+          profile={editingEntry.profile}
+          record={editingEntry.record}
+          date={date}
+          profiles={profiles}
+          locations={locations}
+          onClose={() => setEditingEntry(null)}
+          onSaved={() => {
+            setEditingEntry(null)
+            loadDaily()
+          }}
+        />
       )}
     </AppLayout>
   )
 }
 
-function DailyTable({ rows }) {
+function DailyTable({ rows, onEdit }) {
   if (rows.length === 0) {
     return <EmptyState icon={Clock} title="No staff found" description="Invite staff to see attendance here." />
   }
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-sm">
+      <table className="w-full min-w-[880px] text-sm">
         <thead className="bg-sand-100 text-ink-500 text-left">
           <tr>
             <th className="px-5 py-3 font-medium">Staff</th>
             <th className="px-5 py-3 font-medium">Department</th>
             <th className="px-5 py-3 font-medium">Clock in</th>
             <th className="px-5 py-3 font-medium">Clock out</th>
+            <th className="px-5 py-3 font-medium">Lunch</th>
             <th className="px-5 py-3 font-medium">Hours</th>
             <th className="px-5 py-3 font-medium">Location</th>
+            <th className="px-5 py-3 font-medium" />
           </tr>
         </thead>
         <tbody className="divide-y divide-sand-100">
@@ -197,7 +246,7 @@ function DailyTable({ rows }) {
               <td className="px-5 py-3 font-medium text-ink-900">{profile.full_name}</td>
               <td className="px-5 py-3 text-ink-500">{profile.department || '—'}</td>
               {!record ? (
-                <td colSpan={3} className="px-5 py-3 text-ink-500 italic">
+                <td colSpan={4} className="px-5 py-3 text-ink-500 italic">
                   Not clocked in
                 </td>
               ) : (
@@ -207,12 +256,23 @@ function DailyTable({ rows }) {
                     {record.is_late && <span className="ml-1.5 badge-rejected">Late</span>}
                   </td>
                   <td className="px-5 py-3 text-ink-700">{formatTime(record.clock_out_at)}</td>
-                  <td className="px-5 py-3 text-ink-700">
-                    {formatHours(hoursBetween(record.clock_in_at, record.clock_out_at))}
+                  <td className="px-5 py-3 text-ink-500 text-xs">
+                    {record.lunch_start_at
+                      ? `${formatTime(record.lunch_start_at)}–${formatTime(record.lunch_end_at)}`
+                      : '—'}
                   </td>
+                  <td className="px-5 py-3 text-ink-700">{formatHours(netHoursWorked(record))}</td>
                 </>
               )}
               <td className="px-5 py-3 text-ink-500">{record?.work_locations?.name || '—'}</td>
+              <td className="px-5 py-3 text-right">
+                <button
+                  onClick={() => onEdit(profile, record)}
+                  className="text-brand-600 hover:underline text-xs font-medium"
+                >
+                  {record ? 'Edit' : 'Add entry'}
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -220,6 +280,190 @@ function DailyTable({ rows }) {
       </div>
     </div>
   )
+}
+
+function ManualEntryModal({ profile, record, date, profiles, locations, onClose, onSaved }) {
+  const [profileId, setProfileId] = useState(profile?.id || record?.profile_id || '')
+  const [entryDate, setEntryDate] = useState(record?.date || date)
+  const [clockInTime, setClockInTime] = useState(record?.clock_in_at ? toTimeInput(record.clock_in_at) : '')
+  const [clockOutTime, setClockOutTime] = useState(record?.clock_out_at ? toTimeInput(record.clock_out_at) : '')
+  const [lunchStartTime, setLunchStartTime] = useState(
+    record?.lunch_start_at ? toTimeInput(record.lunch_start_at) : ''
+  )
+  const [lunchEndTime, setLunchEndTime] = useState(record?.lunch_end_at ? toTimeInput(record.lunch_end_at) : '')
+  const [locationId, setLocationId] = useState(record?.work_location_id || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const selectedProfile = profiles.find((p) => p.id === profileId)
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setError('')
+    if (!profileId) {
+      setError('Choose which staff member this entry is for.')
+      return
+    }
+    if (!entryDate) {
+      setError('Choose a date.')
+      return
+    }
+    if (!clockInTime) {
+      setError('Clock-in time is required.')
+      return
+    }
+    if ((lunchStartTime && !lunchEndTime) || (!lunchStartTime && lunchEndTime)) {
+      setError('Lunch start and end must both be filled in, or both left blank.')
+      return
+    }
+
+    setSaving(true)
+
+    const clockInISO = new Date(`${entryDate}T${clockInTime}:00`).toISOString()
+    const clockOutISO = clockOutTime ? new Date(`${entryDate}T${clockOutTime}:00`).toISOString() : null
+    const lunchStartISO = lunchStartTime ? new Date(`${entryDate}T${lunchStartTime}:00`).toISOString() : null
+    const lunchEndISO = lunchEndTime ? new Date(`${entryDate}T${lunchEndTime}:00`).toISOString() : null
+    const late = isLateClockIn(clockInISO, selectedProfile?.work_start_time)
+
+    const { error: upsertError } = await supabase.from('attendance_records').upsert(
+      {
+        profile_id: profileId,
+        date: entryDate,
+        clock_in_at: clockInISO,
+        clock_out_at: clockOutISO,
+        lunch_start_at: lunchStartISO,
+        lunch_end_at: lunchEndISO,
+        work_location_id: locationId || null,
+        is_late: late,
+      },
+      { onConflict: 'profile_id,date' }
+    )
+
+    setSaving(false)
+    if (upsertError) {
+      setError(upsertError.message)
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="card w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">
+            {record ? 'Edit attendance entry' : 'Manual attendance entry'}
+          </h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          {error && <Alert tone="rose">{error}</Alert>}
+
+          <div>
+            <label className="field-label">Staff</label>
+            <select
+              className="field-input"
+              value={profileId}
+              onChange={(e) => setProfileId(e.target.value)}
+              disabled={Boolean(profile || record)}
+            >
+              <option value="">— Select staff —</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="field-label">Date</label>
+            <input
+              type="date"
+              className="field-input"
+              value={entryDate}
+              onChange={(e) => setEntryDate(e.target.value)}
+              disabled={Boolean(record)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Clock in</label>
+              <input
+                type="time"
+                className="field-input"
+                value={clockInTime}
+                onChange={(e) => setClockInTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="field-label">Clock out</label>
+              <input
+                type="time"
+                className="field-input"
+                value={clockOutTime}
+                onChange={(e) => setClockOutTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Lunch start</label>
+              <input
+                type="time"
+                className="field-input"
+                value={lunchStartTime}
+                onChange={(e) => setLunchStartTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="field-label">Lunch end</label>
+              <input
+                type="time"
+                className="field-input"
+                value={lunchEndTime}
+                onChange={(e) => setLunchEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="field-label">Location (optional)</label>
+            <select className="field-input" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+              <option value="">No location (manual entry)</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Saving…' : 'Save entry'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Extracts "HH:MM" in local time from a timestamptz value, for a <input type="time">.
+function toTimeInput(isoString) {
+  const d = new Date(isoString)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
 }
 
 function MonthlyTable({ rows }) {

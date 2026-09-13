@@ -61,6 +61,33 @@ export function hoursBetween(startISO, endISO) {
   return ms > 0 ? ms / 1000 / 60 / 60 : 0
 }
 
+export function formatDateWithDay(dateStr) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-MY', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+export function formatHoursDecimal(hoursDecimal) {
+  if (hoursDecimal == null) return ''
+  return hoursDecimal.toFixed(2)
+}
+
+export function lunchHours(record) {
+  if (!record?.lunch_start_at || !record?.lunch_end_at) return 0
+  return hoursBetween(record.lunch_start_at, record.lunch_end_at) || 0
+}
+
+export function netHoursWorked(record) {
+  const gross = hoursBetween(record?.clock_in_at, record?.clock_out_at)
+  if (gross == null) return null
+  return Math.max(0, gross - lunchHours(record))
+}
+
 // Compares a clock-in timestamp's time-of-day against a "HH:MM:SS" work_start_time.
 export function isLateClockIn(clockInISO, workStartTime) {
   if (!clockInISO || !workStartTime) return false

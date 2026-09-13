@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { MapPin, LogIn, LogOut, Clock } from 'lucide-react'
+import { MapPin, LogIn, LogOut, Clock, Coffee } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
 import { getCurrentPosition, findNearestLocation } from '../lib/geo'
-import { formatDate, formatTime, formatHours, hoursBetween, isLateClockIn, toISODate } from '../lib/helpers'
+import { formatDate, formatTime, formatHours, netHoursWorked, lunchHours, isLateClockIn, toISODate } from '../lib/helpers'
 
 function todayStr() {
   return toISODate(new Date())
@@ -49,27 +49,26 @@ export default function Attendance() {
     setLoading(false)
   }
 
+  // Shared geofence check used by clock in/out and lunch start/end.
+  async function checkLocation(actionLabel) {
+    const pos = await getCurrentPosition()
+    const { location, distance, withinRange } = findNearestLocation(pos.lat, pos.lng, locations)
+    if (!withinRange) {
+      throw new Error(
+        location
+          ? `You're about ${Math.round(distance)}m from ${location.name} — you need to be within ${location.radius_meters}m to ${actionLabel}.`
+          : 'No work locations have been set up yet. Ask your admin to add one.'
+      )
+    }
+    return { pos, location }
+  }
+
   async function handleClockIn() {
     setError('')
     setNotice('')
     setWorking(true)
     try {
-      const pos = await getCurrentPosition()
-      const { location, distance, withinRange } = findNearestLocation(
-        pos.lat,
-        pos.lng,
-        locations
-      )
-      if (!withinRange) {
-        setError(
-          location
-            ? `You're about ${Math.round(distance)}m from ${location.name} — you need to be within ${location.radius_meters}m to clock in.`
-            : 'No work locations have been set up yet. Ask your admin to add one.'
-        )
-        setWorking(false)
-        return
-      }
-
+      const { pos, location } = await checkLocation('clock in')
       const now = new Date().toISOString()
       const late = isLateClockIn(now, profile.work_start_time)
 
@@ -100,27 +99,66 @@ export default function Attendance() {
     setWorking(false)
   }
 
+  async function handleLunchStart() {
+    setError('')
+    setNotice('')
+    setWorking(true)
+    try {
+      const { pos, location } = await checkLocation('start your lunch break')
+      const now = new Date().toISOString()
+      const { data, error: updateError } = await supabase
+        .from('attendance_records')
+        .update({ lunch_start_at: now, lunch_start_lat: pos.lat, lunch_start_lng: pos.lng })
+        .eq('id', today.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        setError(updateError.message)
+      } else {
+        setToday(data)
+        setNotice('Lunch break started. Enjoy your meal!')
+        load()
+      }
+    } catch (err) {
+      setError(err.message || 'Could not get your location. Please allow location access and try again.')
+    }
+    setWorking(false)
+  }
+
+  async function handleLunchEnd() {
+    setError('')
+    setNotice('')
+    setWorking(true)
+    try {
+      const { pos } = await checkLocation('end your lunch break')
+      const now = new Date().toISOString()
+      const { data, error: updateError } = await supabase
+        .from('attendance_records')
+        .update({ lunch_end_at: now, lunch_end_lat: pos.lat, lunch_end_lng: pos.lng })
+        .eq('id', today.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        setError(updateError.message)
+      } else {
+        setToday(data)
+        setNotice('Lunch break ended. Back to work!')
+        load()
+      }
+    } catch (err) {
+      setError(err.message || 'Could not get your location. Please allow location access and try again.')
+    }
+    setWorking(false)
+  }
+
   async function handleClockOut() {
     setError('')
     setNotice('')
     setWorking(true)
     try {
-      const pos = await getCurrentPosition()
-      const { location, distance, withinRange } = findNearestLocation(
-        pos.lat,
-        pos.lng,
-        locations
-      )
-      if (!withinRange) {
-        setError(
-          location
-            ? `You're about ${Math.round(distance)}m from ${location.name} — you need to be within ${location.radius_meters}m to clock out.`
-            : 'No work locations have been set up yet. Ask your admin to add one.'
-        )
-        setWorking(false)
-        return
-      }
-
+      const { pos } = await checkLocation('clock out')
       const now = new Date().toISOString()
       const { data, error: updateError } = await supabase
         .from('attendance_records')
@@ -142,6 +180,8 @@ export default function Attendance() {
     setWorking(false)
   }
 
+  const onLunchBreak = today?.lunch_start_at && !today?.lunch_end_at
+
   return (
     <AppLayout title="Attendance" subtitle="Clock in and out from a registered work location.">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -156,27 +196,46 @@ export default function Attendance() {
           ) : !today ? (
             <>
               <p className="mt-2 font-medium text-ink-900">You haven't clocked in today</p>
-              <button
-                onClick={handleClockIn}
-                disabled={working}
-                className="btn-primary mt-4 w-full"
-              >
+              <button onClick={handleClockIn} disabled={working} className="btn-primary mt-4 w-full">
                 <LogIn size={16} /> {working ? 'Checking location…' : 'Clock In'}
               </button>
             </>
           ) : !today.clock_out_at ? (
             <>
-              <p className="mt-2 font-medium text-ink-900">
-                Clocked in at {formatTime(today.clock_in_at)}
-              </p>
+              <p className="mt-2 font-medium text-ink-900">Clocked in at {formatTime(today.clock_in_at)}</p>
               {today.is_late && <p className="text-sm text-rose-500 font-medium">Marked late</p>}
-              <button
-                onClick={handleClockOut}
-                disabled={working}
-                className="btn-secondary mt-4 w-full"
-              >
-                <LogOut size={16} /> {working ? 'Checking location…' : 'Clock Out'}
-              </button>
+
+              {onLunchBreak && (
+                <p className="text-sm text-amber-600 font-medium mt-1">
+                  On lunch break since {formatTime(today.lunch_start_at)}
+                </p>
+              )}
+              {today.lunch_start_at && today.lunch_end_at && (
+                <p className="text-xs text-ink-500 mt-1">
+                  Lunch: {formatTime(today.lunch_start_at)} – {formatTime(today.lunch_end_at)}
+                </p>
+              )}
+
+              <div className="w-full space-y-2 mt-4">
+                {!today.lunch_start_at && (
+                  <button onClick={handleLunchStart} disabled={working} className="btn-secondary w-full">
+                    <Coffee size={16} /> {working ? 'Checking location…' : 'Start Lunch'}
+                  </button>
+                )}
+                {onLunchBreak && (
+                  <button onClick={handleLunchEnd} disabled={working} className="btn-secondary w-full">
+                    <Coffee size={16} /> {working ? 'Checking location…' : 'End Lunch'}
+                  </button>
+                )}
+                <button
+                  onClick={handleClockOut}
+                  disabled={working || onLunchBreak}
+                  className="btn-primary w-full"
+                  title={onLunchBreak ? 'End your lunch break first' : undefined}
+                >
+                  <LogOut size={16} /> {working ? 'Checking location…' : 'Clock Out'}
+                </button>
+              </div>
             </>
           ) : (
             <>
@@ -184,8 +243,14 @@ export default function Attendance() {
                 {formatTime(today.clock_in_at)} – {formatTime(today.clock_out_at)}
               </p>
               {today.is_late && <p className="text-sm text-rose-500 font-medium">Marked late</p>}
+              {today.lunch_start_at && today.lunch_end_at && (
+                <p className="text-xs text-ink-500 mt-1">
+                  Lunch: {formatTime(today.lunch_start_at)} – {formatTime(today.lunch_end_at)} (
+                  {formatHours(lunchHours(today))})
+                </p>
+              )}
               <p className="mt-1 text-sm text-ink-500">
-                {formatHours(hoursBetween(today.clock_in_at, today.clock_out_at))} worked today
+                {formatHours(netHoursWorked(today))} worked today
               </p>
             </>
           )}
@@ -218,12 +283,13 @@ export default function Attendance() {
             />
           ) : (
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-sand-100 text-ink-500 text-left">
                 <tr>
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Clock in</th>
                   <th className="px-5 py-3 font-medium">Clock out</th>
+                  <th className="px-5 py-3 font-medium">Lunch</th>
                   <th className="px-5 py-3 font-medium">Hours</th>
                   <th className="px-5 py-3 font-medium">Location</th>
                 </tr>
@@ -237,9 +303,10 @@ export default function Attendance() {
                       {r.is_late && ' (late)'}
                     </td>
                     <td className="px-5 py-3 text-ink-700">{formatTime(r.clock_out_at)}</td>
-                    <td className="px-5 py-3 text-ink-700">
-                      {formatHours(hoursBetween(r.clock_in_at, r.clock_out_at))}
+                    <td className="px-5 py-3 text-ink-500 text-xs">
+                      {r.lunch_start_at ? `${formatTime(r.lunch_start_at)}–${formatTime(r.lunch_end_at)}` : '—'}
                     </td>
+                    <td className="px-5 py-3 text-ink-700">{formatHours(netHoursWorked(r))}</td>
                     <td className="px-5 py-3 text-ink-500">{r.work_locations?.name || '—'}</td>
                   </tr>
                 ))}

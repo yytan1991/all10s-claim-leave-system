@@ -229,9 +229,14 @@ function LocationManager() {
     load()
   }
 
-  async function removeLocation(id) {
+    async function removeLocation(id) {
     if (!confirm('Remove this location? Staff will no longer be able to clock in from it.')) return
-    await supabase.from('work_locations').delete().eq('id', id)
+    setError('')
+    const { error: deleteError } = await supabase.from('work_locations').delete().eq('id', id)
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
     load()
   }
 

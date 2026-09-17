@@ -75,6 +75,9 @@ export async function generatePayslipPdf(payslip, org, employee) {
       doc.addImage(dataUrl, detectImageFormat(dataUrl), margin, y - 14, targetWidth, targetHeight)
       textStartX = margin + targetWidth + 15
     } catch (err) {
+      // Logo failed to load (network hiccup, CORS, etc.) — fall back to
+      // text-only header rather than failing the whole payslip.
+      // eslint-disable-next-line no-console
       console.error('Could not load company logo for PDF', err)
     }
   }

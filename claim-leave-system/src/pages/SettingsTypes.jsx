@@ -409,6 +409,7 @@ function HolidayManager() {
   )
 }
 
+
 function StageManager() {
   const { profile } = useAuth()
   const [rows, setRows] = useState([])

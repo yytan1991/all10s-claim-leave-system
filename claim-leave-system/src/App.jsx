@@ -20,6 +20,8 @@ import SuperadminOrganizations from './pages/SuperadminOrganizations'
 import SuperadminUsers from './pages/SuperadminUsers'
 import MyPayslips from './pages/MyPayslips'
 import PayslipsAdmin from './pages/PayslipsAdmin'
+import CashFlow from './pages/CashFlow'
+import Announcements from './pages/Announcements'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
@@ -168,6 +170,22 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <PayslipsAdmin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cashflow"
+        element={
+          <ProtectedRoute requireAdmin>
+            <CashFlow />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/announcements"
+        element={
+          <ProtectedRoute>
+            <Announcements />
           </ProtectedRoute>
         }
       />

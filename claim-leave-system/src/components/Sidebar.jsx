@@ -15,6 +15,8 @@ import {
   Users2,
   KanbanSquare,
   Receipt,
+  Wallet,
+  Megaphone,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -25,6 +27,7 @@ let savedScrollTop = 0
 
 const staffLinks = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/announcements', label: 'Announcements', icon: Megaphone },
   { to: '/attendance', label: 'Attendance', icon: Clock },
   { to: '/leave/apply', label: 'Apply Leave', icon: CalendarPlus },
   { to: '/leave', label: 'My Leave', icon: CalendarDays },
@@ -48,6 +51,7 @@ const managerLinks = [
 const adminLinks = [
   { to: '/employees', label: 'Employees', icon: Users },
   { to: '/payslips-admin', label: 'Payslips', icon: Receipt },
+  { to: '/cashflow', label: 'Cash Flow', icon: Wallet },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

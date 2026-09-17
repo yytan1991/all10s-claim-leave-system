@@ -14,6 +14,7 @@ export default function TeamCalendar() {
   const [year, setYear] = useState(today.getFullYear())
   const [monthIndex, setMonthIndex] = useState(today.getMonth())
   const [entries, setEntries] = useState([])
+  const [holidays, setHolidays] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(null)
 
@@ -29,24 +30,38 @@ export default function TeamCalendar() {
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase.rpc('get_team_leave', {
-      range_start: toISODate(rangeStart),
-      range_end: toISODate(rangeEnd),
-      p_org_id: profile.org_id,
-    })
+    const [{ data: leaveData, error }, { data: holidayData }] = await Promise.all([
+      supabase.rpc('get_team_leave', {
+        range_start: toISODate(rangeStart),
+        range_end: toISODate(rangeEnd),
+        p_org_id: profile.org_id,
+      }),
+      supabase
+        .from('holidays')
+        .select('*')
+        .eq('org_id', profile.org_id)
+        .gte('date', toISODate(rangeStart))
+        .lte('date', toISODate(rangeEnd)),
+    ])
     if (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to load team leave', error)
       setEntries([])
     } else {
-      setEntries(data || [])
+      setEntries(leaveData || [])
     }
+    setHolidays(holidayData || [])
     setLoading(false)
   }
 
   function entriesForDay(date) {
     const iso = toISODate(date)
     return entries.filter((e) => e.start_date <= iso && e.end_date >= iso)
+  }
+
+  function holidayForDay(date) {
+    const iso = toISODate(date)
+    return holidays.find((h) => h.date === iso) || null
   }
 
   function goToPrevMonth() {
@@ -70,6 +85,7 @@ export default function TeamCalendar() {
   })
 
   const selectedEntries = selectedDate ? entriesForDay(selectedDate) : []
+  const selectedHoliday = selectedDate ? holidayForDay(selectedDate) : null
 
   return (
     <AppLayout title="Team calendar" subtitle="See who's on leave across the team.">
@@ -90,6 +106,9 @@ export default function TeamCalendar() {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Pending
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-yellow-300" /> Holiday
             </span>
           </div>
           <button onClick={goToToday} className="btn-secondary text-sm">
@@ -114,6 +133,7 @@ export default function TeamCalendar() {
                 const inMonth = date.getMonth() === monthIndex
                 const isToday = toISODate(date) === toISODate(today)
                 const dayEntries = entriesForDay(date)
+                const holiday = holidayForDay(date)
                 const isSelected = selectedDate && toISODate(selectedDate) === toISODate(date)
                 const visible = dayEntries.slice(0, 3)
                 const overflow = dayEntries.length - visible.length
@@ -123,7 +143,7 @@ export default function TeamCalendar() {
                     key={date.toISOString()}
                     onClick={() => setSelectedDate(date)}
                     className={`min-h-[92px] p-2 text-left align-top flex flex-col gap-1 transition-colors ${
-                      inMonth ? 'bg-white' : 'bg-sand-50'
+                      holiday ? 'bg-yellow-50' : inMonth ? 'bg-white' : 'bg-sand-50'
                     } ${isSelected ? 'ring-2 ring-inset ring-brand-500' : 'hover:bg-sand-50'}`}
                   >
                     <span
@@ -138,6 +158,14 @@ export default function TeamCalendar() {
                       {date.getDate()}
                     </span>
                     <div className="space-y-1">
+                      {holiday && (
+                        <div
+                          className="truncate rounded px-1.5 py-0.5 text-[11px] font-medium bg-yellow-200 text-yellow-800"
+                          title={holiday.name}
+                        >
+                          {holiday.name}
+                        </div>
+                      )}
                       {visible.map((e) => (
                         <div
                           key={e.id + date.toISOString()}
@@ -178,31 +206,43 @@ export default function TeamCalendar() {
           <p className="text-sm text-ink-500">Loading…</p>
         ) : !selectedDate ? (
           <p className="text-sm text-ink-500">Click any date above to see who's on leave that day.</p>
-        ) : selectedEntries.length === 0 ? (
-          <EmptyState
-            icon={CalendarRange}
-            title="No one's on leave"
-            description="Nobody has approved or pending leave for this day."
-          />
         ) : (
-          <div className="card divide-y divide-sand-100">
-            {selectedEntries.map((e) => (
-              <div key={e.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm font-medium text-ink-900">{e.full_name}</p>
-                  <p className="text-xs text-ink-500">
-                    {e.leave_type} · {e.department || 'No department'}
-                  </p>
-                </div>
-                <span
-                  className={`badge ${
-                    e.status === 'approved' ? 'badge-approved' : 'badge-pending'
-                  }`}
-                >
-                  {e.status === 'approved' ? 'Approved' : 'Pending'}
-                </span>
+          <div className="space-y-3">
+            {selectedHoliday && (
+              <div className="card bg-yellow-50 border-yellow-200 px-5 py-3">
+                <p className="text-sm font-medium text-yellow-800">🎉 {selectedHoliday.name}</p>
+                <p className="text-xs text-yellow-700/80">Public/company holiday</p>
               </div>
-            ))}
+            )}
+            {selectedEntries.length === 0 ? (
+              !selectedHoliday && (
+                <EmptyState
+                  icon={CalendarRange}
+                  title="No one's on leave"
+                  description="Nobody has approved or pending leave for this day."
+                />
+              )
+            ) : (
+              <div className="card divide-y divide-sand-100">
+                {selectedEntries.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between px-5 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-ink-900">{e.full_name}</p>
+                      <p className="text-xs text-ink-500">
+                        {e.leave_type} · {e.department || 'No department'}
+                      </p>
+                    </div>
+                    <span
+                      className={`badge ${
+                        e.status === 'approved' ? 'badge-approved' : 'badge-pending'
+                      }`}
+                    >
+                      {e.status === 'approved' ? 'Approved' : 'Pending'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Plus, Trash2, MapPin, LocateFixed } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Trash2, MapPin, LocateFixed, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import { getCurrentPosition } from '../lib/geo'
+import { getMonthGrid, toISODate } from '../lib/helpers'
 
 export default function SettingsTypes() {
   const [tab, setTab] = useState('leave')
@@ -18,6 +20,7 @@ export default function SettingsTypes() {
           { key: 'claim', label: 'Claim types' },
           { key: 'locations', label: 'Work locations' },
           { key: 'stages', label: 'Pipeline stages' },
+          { key: 'holidays', label: 'Holidays' },
         ].map((t) => (
           <button
             key={t.key}
@@ -38,6 +41,7 @@ export default function SettingsTypes() {
       {tab === 'claim' && <TypeManager table="claim_types" />}
       {tab === 'locations' && <LocationManager />}
       {tab === 'stages' && <StageManager />}
+      {tab === 'holidays' && <HolidayManager />}
     </AppLayout>
   )
 }
@@ -200,6 +204,207 @@ function CompanyDetailsManager() {
           {saving ? 'Saving…' : 'Save company details'}
         </button>
       </form>
+    </div>
+  )
+}
+
+function HolidayManager() {
+  const { profile } = useAuth()
+  const today = new Date()
+  const [year, setYear] = useState(today.getFullYear())
+  const [monthIndex, setMonthIndex] = useState(today.getMonth())
+  const [rows, setRows] = useState([])
+  const [name, setName] = useState('')
+  const [date, setDate] = useState('')
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const weeks = useMemo(() => getMonthGrid(year, monthIndex), [year, monthIndex])
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('holidays')
+      .select('*')
+      .eq('org_id', profile.org_id)
+      .order('date')
+    setRows(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (profile) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.org_id])
+
+  function holidayForDay(d) {
+    const iso = toISODate(d)
+    return rows.find((r) => r.date === iso) || null
+  }
+
+  async function addHoliday(e) {
+    e.preventDefault()
+    setError('')
+    if (!name.trim() || !date) {
+      setError('Enter a name and a date.')
+      return
+    }
+    const { error: insertError } = await supabase.from('holidays').insert({
+      name: name.trim(),
+      date,
+      org_id: profile.org_id,
+      created_by: profile.id,
+    })
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+    setName('')
+    setDate('')
+    load()
+  }
+
+  async function removeHoliday(id) {
+    if (!confirm('Remove this holiday?')) return
+    await supabase.from('holidays').delete().eq('id', id)
+    setSelectedDate(null)
+    load()
+  }
+
+  function goToPrevMonth() {
+    const d = new Date(year, monthIndex - 1, 1)
+    setYear(d.getFullYear())
+    setMonthIndex(d.getMonth())
+  }
+  function goToNextMonth() {
+    const d = new Date(year, monthIndex + 1, 1)
+    setYear(d.getFullYear())
+    setMonthIndex(d.getMonth())
+  }
+  function goToToday() {
+    setYear(today.getFullYear())
+    setMonthIndex(today.getMonth())
+  }
+
+  const monthLabel = new Date(year, monthIndex, 1).toLocaleDateString('en-MY', {
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const selectedHoliday = selectedDate ? holidayForDay(selectedDate) : null
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <form onSubmit={addHoliday} className="card p-5 space-y-4">
+        {error && <Alert tone="rose">{error}</Alert>}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="field-label">Holiday name</label>
+            <input
+              className="field-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Hari Raya Aidilfitri"
+            />
+          </div>
+          <div>
+            <label className="field-label">Date</label>
+            <DatePicker value={date} onChange={setDate} placeholder="Pick a date" />
+          </div>
+        </div>
+        <button type="submit" className="btn-primary">
+          <Plus size={15} /> Add holiday
+        </button>
+      </form>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={goToPrevMonth} className="btn-secondary px-2.5">
+            <ChevronLeft size={16} />
+          </button>
+          <h3 className="text-base font-semibold font-display w-40 text-center">{monthLabel}</h3>
+          <button type="button" onClick={goToNextMonth} className="btn-secondary px-2.5">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <button type="button" onClick={goToToday} className="btn-secondary text-sm">
+          Today
+        </button>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="grid grid-cols-7 bg-sand-100 text-ink-500 text-xs font-medium">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+            <div key={d} className="px-2 py-2 text-center">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="divide-y divide-sand-100">
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7 divide-x divide-sand-100">
+              {week.map((d) => {
+                const inMonth = d.getMonth() === monthIndex
+                const isToday = toISODate(d) === toISODate(today)
+                const holiday = holidayForDay(d)
+                const isSelected = selectedDate && toISODate(selectedDate) === toISODate(d)
+                return (
+                  <button
+                    type="button"
+                    key={d.toISOString()}
+                    onClick={() => setSelectedDate(holiday ? d : null)}
+                    className={`min-h-[64px] p-1.5 text-left align-top flex flex-col gap-1 transition-colors ${
+                      holiday ? 'bg-yellow-50' : inMonth ? 'bg-white' : 'bg-sand-50'
+                    } ${isSelected ? 'ring-2 ring-inset ring-brand-500' : holiday ? 'hover:bg-yellow-100' : ''}`}
+                  >
+                    <span
+                      className={`text-xs font-medium ${
+                        isToday
+                          ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-white'
+                          : inMonth
+                          ? 'text-ink-700'
+                          : 'text-ink-500/50'
+                      }`}
+                    >
+                      {d.getDate()}
+                    </span>
+                    {holiday && (
+                      <span className="truncate rounded px-1 py-0.5 text-[10px] font-medium bg-yellow-200 text-yellow-800">
+                        {holiday.name}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {selectedHoliday && (
+        <div className="card px-5 py-3 flex items-center justify-between bg-yellow-50 border-yellow-200">
+          <div>
+            <p className="text-sm font-medium text-yellow-800">🎉 {selectedHoliday.name}</p>
+            <p className="text-xs text-yellow-700/80">
+              {new Date(selectedHoliday.date).toLocaleDateString('en-MY', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+          <button
+            onClick={() => removeHoliday(selectedHoliday.id)}
+            className="text-rose-500 hover:text-rose-600"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-ink-500">Loading…</p>}
     </div>
   )
 }

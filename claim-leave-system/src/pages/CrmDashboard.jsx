@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users2, TrendingUp, CircleCheck, CircleX } from 'lucide-react'
+import { Users2, TrendingUp, CircleCheck, CircleX, AlarmClock } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { StatCard } from '../components/UI'
-import { stagePillClass } from '../lib/helpers'
+import { stagePillClass, formatDate, toISODate } from '../lib/helpers'
 
 export default function CrmDashboard() {
-  const { profile } = useAuth()
+  const { profile, isManager } = useAuth()
   const [stages, setStages] = useState([])
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -23,7 +23,9 @@ export default function CrmDashboard() {
       supabase.from('crm_stages').select('*').eq('org_id', profile.org_id).order('sort_order'),
       supabase
         .from('crm_contacts')
-        .select('id, stage_id, updated_at, crm_stages(name, is_won, is_lost)')
+        .select(
+          'id, stage_id, updated_at, parent_name, next_followup_date, pic_id, crm_stages(name, is_won, is_lost), profiles!crm_contacts_pic_id_fkey(full_name)'
+        )
         .eq('org_id', profile.org_id),
     ])
     setStages(stageData || [])
@@ -57,6 +59,21 @@ export default function CrmDashboard() {
   })
   const maxWon = Math.max(1, ...wonByMonth.map((m) => m.count))
 
+  // Follow-up reminders — only open leads (not won/lost) with a date set.
+  // RLS already scopes `contacts` to just this person's own leads unless
+  // they're a manager/admin, so no extra filtering by PIC is needed here.
+  const today = toISODate(new Date())
+  const sevenDaysOut = toISODate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
+  const openWithFollowup = contacts.filter(
+    (c) => c.next_followup_date && !c.crm_stages?.is_won && !c.crm_stages?.is_lost
+  )
+  const overdue = openWithFollowup
+    .filter((c) => c.next_followup_date < today)
+    .sort((a, b) => a.next_followup_date.localeCompare(b.next_followup_date))
+  const dueSoon = openWithFollowup
+    .filter((c) => c.next_followup_date >= today && c.next_followup_date <= sevenDaysOut)
+    .sort((a, b) => a.next_followup_date.localeCompare(b.next_followup_date))
+
   return (
     <AppLayout title="Sales pipeline" subtitle="Where every lead stands, at a glance.">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -71,6 +88,49 @@ export default function CrmDashboard() {
           tone="rose"
         />
       </div>
+
+      {(overdue.length > 0 || dueSoon.length > 0) && (
+        <div className="card p-5 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <AlarmClock size={17} className="text-amber-500" />
+            <h3 className="font-semibold text-ink-900">Follow-up reminders</h3>
+          </div>
+          <div className="space-y-2">
+            {overdue.map((c) => (
+              <Link
+                key={c.id}
+                to={`/crm/leads/${c.id}`}
+                className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-sand-50"
+              >
+                <div>
+                  <p className="text-sm font-medium text-ink-900">{c.parent_name}</p>
+                  <p className="text-xs text-ink-500">
+                    {isManager && c.profiles?.full_name ? `${c.profiles.full_name} · ` : ''}
+                    Due {formatDate(c.next_followup_date)}
+                  </p>
+                </div>
+                <span className="badge-rejected">Overdue</span>
+              </Link>
+            ))}
+            {dueSoon.map((c) => (
+              <Link
+                key={c.id}
+                to={`/crm/leads/${c.id}`}
+                className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-sand-50"
+              >
+                <div>
+                  <p className="text-sm font-medium text-ink-900">{c.parent_name}</p>
+                  <p className="text-xs text-ink-500">
+                    {isManager && c.profiles?.full_name ? `${c.profiles.full_name} · ` : ''}
+                    Due {formatDate(c.next_followup_date)}
+                  </p>
+                </div>
+                <span className="badge-pending">Due soon</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">

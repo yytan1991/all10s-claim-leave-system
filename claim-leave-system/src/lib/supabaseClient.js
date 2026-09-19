@@ -11,3 +11,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// A brand-new, throwaway client for creating a new staff login. Signing
+// someone up normally makes THAT client's session become the new user —
+// which would log the admin out of their own account if done on the main
+// `supabase` client above. This isolated instance never persists a session
+// and is never reused, so the admin's real session is untouched.
+export function createSignupClient() {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
+}

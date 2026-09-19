@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Users, X, Clock, UserPlus } from 'lucide-react'
-import { supabase } from '../lib/supabaseClient'
+import { Users, X, Clock, UserPlus, UserRoundPlus } from 'lucide-react'
+import { supabase, createSignupClient } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { EmptyState, Alert } from '../components/UI'
@@ -13,6 +13,7 @@ export default function Employees() {
   const [editingHours, setEditingHours] = useState(null)
   const [editingPayroll, setEditingPayroll] = useState(null)
   const [addingExisting, setAddingExisting] = useState(false)
+  const [creatingNew, setCreatingNew] = useState(false)
 
   useEffect(() => {
     if (profile) loadEmployees()
@@ -36,7 +37,10 @@ export default function Employees() {
 
   return (
     <AppLayout title="Employees" subtitle="Manage staff roles and leave entitlements.">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end mb-4 gap-2">
+        <button onClick={() => setCreatingNew(true)} className="btn-primary text-sm">
+          <UserRoundPlus size={15} /> Create new staff
+        </button>
         <button onClick={() => setAddingExisting(true)} className="btn-secondary text-sm">
           <UserPlus size={15} /> Add existing staff member
         </button>
@@ -139,6 +143,16 @@ export default function Employees() {
           onClose={() => setAddingExisting(false)}
           onSaved={() => {
             setAddingExisting(false)
+            loadEmployees()
+          }}
+        />
+      )}
+      {creatingNew && (
+        <CreateStaffModal
+          orgId={profile.org_id}
+          onClose={() => setCreatingNew(false)}
+          onSaved={() => {
+            setCreatingNew(false)
             loadEmployees()
           }}
         />
@@ -254,6 +268,172 @@ function AddExistingStaffModal({ orgId, onClose, onSaved }) {
       </div>
     </div>
   )
+}
+
+function CreateStaffModal({ orgId, onClose, onSaved }) {
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [department, setDepartment] = useState('')
+  const [role, setRole] = useState('staff')
+  const [password, setPassword] = useState(generatePassword())
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [created, setCreated] = useState(false)
+
+  function generatePasswordClick() {
+    setPassword(generatePassword())
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    setError('')
+    if (!fullName.trim() || !email.trim() || password.length < 6) {
+      setError('Fill in name and email, and make sure the password is at least 6 characters.')
+      return
+    }
+    setSaving(true)
+
+    // Isolated client so this sign-up never touches the admin's own session.
+    const signupClient = createSignupClient()
+    const { data, error: signUpError } = await signupClient.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: { full_name: fullName.trim(), org_id: orgId },
+      },
+    })
+
+    if (signUpError) {
+      setSaving(false)
+      setError(signUpError.message)
+      return
+    }
+
+    const newUserId = data?.user?.id
+    if (newUserId) {
+      // The signup trigger already created the profile in the right org
+      // with role "staff" by default — update department/role if changed.
+      await supabase
+        .from('profiles')
+        .update({ department: department || null, role })
+        .eq('user_id', newUserId)
+        .eq('org_id', orgId)
+    }
+
+    setSaving(false)
+    setCreated(true)
+  }
+
+  if (created) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="card w-full max-w-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-ink-900">Staff account created</h3>
+            <button onClick={() => { onSaved(); }} className="text-ink-500 hover:text-ink-900">
+              <X size={18} />
+            </button>
+          </div>
+          <Alert tone="brand">
+            {fullName}'s account is ready. Share these login details with them — the password
+            won't be shown again.
+          </Alert>
+          <div className="mt-4 space-y-2 text-sm">
+            <p>
+              <span className="text-ink-500">Email:</span> <span className="font-medium">{email}</span>
+            </p>
+            <p>
+              <span className="text-ink-500">Password:</span>{' '}
+              <span className="font-mono font-medium">{password}</span>
+            </p>
+          </div>
+          <p className="text-xs text-ink-500 mt-4">
+            If your Supabase project requires email confirmation, they'll need to confirm via
+            email before their first login.
+          </p>
+          <button onClick={() => onSaved()} className="btn-primary w-full mt-5">
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="card w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">Create new staff</h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="text-xs text-ink-500 mb-4">
+          Creates a brand-new login for someone who doesn't have one yet. To promote someone to
+          Admin, do that directly in Supabase instead.
+        </p>
+
+        <form onSubmit={handleCreate} className="space-y-4">
+          {error && <Alert tone="rose">{error}</Alert>}
+
+          <div>
+            <label className="field-label">Full name</label>
+            <input className="field-input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Email</label>
+            <input
+              type="email"
+              className="field-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+            />
+          </div>
+          <div>
+            <label className="field-label">Department (optional)</label>
+            <input className="field-input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">Role</label>
+            <select className="field-input" value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="staff">Staff</option>
+              <option value="manager">Manager</option>
+            </select>
+          </div>
+          <div>
+            <label className="field-label">Temporary password</label>
+            <div className="flex gap-2">
+              <input className="field-input font-mono" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <button type="button" onClick={generatePasswordClick} className="btn-secondary text-xs shrink-0">
+                Regenerate
+              </button>
+            </div>
+            <p className="text-xs text-ink-500 mt-1">You'll share this with them after creating the account.</p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Creating…' : 'Create account'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function generatePassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  let result = ''
+  for (let i = 0; i < 10; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return result
 }
 
 function WorkHoursModal({ employee, onClose, onSaved }) {

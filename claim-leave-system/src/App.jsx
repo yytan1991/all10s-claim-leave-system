@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import LeaveApply from './pages/LeaveApply'
 import LeaveList from './pages/LeaveList'
@@ -27,7 +28,8 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route
         path="/"

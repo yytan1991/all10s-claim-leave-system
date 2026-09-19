@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import { Alert } from '../components/UI'
 
 export default function Login() {
@@ -11,6 +12,11 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showForgot, setShowForgot] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetSending, setResetSending] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   const from = location.state?.from?.pathname || '/'
 
@@ -25,6 +31,25 @@ export default function Login() {
       return
     }
     navigate(from, { replace: true })
+  }
+
+  async function handleResetRequest(e) {
+    e.preventDefault()
+    setResetError('')
+    if (!resetEmail.trim()) {
+      setResetError('Enter your email first.')
+      return
+    }
+    setResetSending(true)
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setResetSending(false)
+    if (resetErr) {
+      setResetError(resetErr.message)
+      return
+    }
+    setResetSent(true)
   }
 
   return (
@@ -55,48 +80,106 @@ export default function Login() {
             <p className="text-ink-500 text-sm">Leave &amp; Claims</p>
           </div>
 
-          <h1 className="text-2xl font-semibold text-ink-900 mb-1">Welcome back</h1>
-          <p className="text-sm text-ink-500 mb-6">Sign in to continue to your dashboard.</p>
+          {!showForgot ? (
+            <>
+              <h1 className="text-2xl font-semibold text-ink-900 mb-1">Welcome back</h1>
+              <p className="text-sm text-ink-500 mb-6">Sign in to continue to your dashboard.</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <Alert tone="rose">{error}</Alert>}
-            <div>
-              <label className="field-label" htmlFor="email">
-                Work email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                className="field-input"
-                placeholder="you@all10sedu.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="field-label" htmlFor="password">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                className="field-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && <Alert tone="rose">{error}</Alert>}
+                <div>
+                  <label className="field-label" htmlFor="email">
+                    Work email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    className="field-input"
+                    placeholder="you@all10sedu.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="password">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    required
+                    className="field-input"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <button type="submit" disabled={loading} className="btn-primary w-full">
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+              </form>
 
-          <p className="mt-6 text-xs text-ink-500">
-            Forgot your password or don't have an account yet? Ask your admin to set one up for
-            you.
-          </p>
+              <p className="mt-6 text-xs text-ink-500">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgot(true)
+                    setResetEmail(email)
+                    setResetSent(false)
+                    setResetError('')
+                  }}
+                  className="text-brand-600 hover:underline font-medium"
+                >
+                  Forgot your password?
+                </button>{' '}
+                Don't have an account yet? Ask your admin to set one up for you.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-semibold text-ink-900 mb-1">Reset your password</h1>
+              <p className="text-sm text-ink-500 mb-6">
+                Enter your email and we'll send you a link to set a new password.
+              </p>
+
+              {resetSent ? (
+                <Alert tone="brand">
+                  If an account exists for that email, a reset link is on its way — check your
+                  inbox (and spam folder).
+                </Alert>
+              ) : (
+                <form onSubmit={handleResetRequest} className="space-y-4">
+                  {resetError && <Alert tone="rose">{resetError}</Alert>}
+                  <div>
+                    <label className="field-label" htmlFor="reset-email">
+                      Work email
+                    </label>
+                    <input
+                      id="reset-email"
+                      type="email"
+                      required
+                      className="field-input"
+                      placeholder="you@all10sedu.com"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                    />
+                  </div>
+                  <button type="submit" disabled={resetSending} className="btn-primary w-full">
+                    {resetSending ? 'Sending…' : 'Send reset link'}
+                  </button>
+                </form>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowForgot(false)}
+                className="mt-6 text-xs text-brand-600 hover:underline font-medium"
+              >
+                ← Back to sign in
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

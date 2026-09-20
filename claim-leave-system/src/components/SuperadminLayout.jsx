@@ -12,10 +12,10 @@ export default function SuperadminLayout({ title, subtitle, children }) {
 
   return (
     <div className="min-h-screen bg-sand-50">
-      <header className="bg-ink-900 text-white">
+      <header className="bg-chrome text-white">
         <div className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between">
           <div>
-            <p className="font-display text-lg font-semibold leading-tight">ALL10S ERP</p>
+            <p className="font-display text-lg font-semibold leading-tight">WiiTeam</p>
             <p className="text-xs text-white/50">Superadmin</p>
           </div>
           <div className="flex items-center gap-4">

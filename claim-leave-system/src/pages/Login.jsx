@@ -52,75 +52,78 @@ export default function Login() {
     setResetSent(true)
   }
 
+  const wiiInput =
+    'w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm text-red-950 ' +
+    'placeholder:text-red-900/30 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-500'
+  const wiiLabel = 'block text-sm font-medium text-red-900 mb-1.5'
+  const wiiButton =
+    'w-full inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold ' +
+    'bg-brand-600 text-white hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  const wiiLink = 'text-brand-600 hover:underline font-medium'
+
   return (
-    <div className="min-h-screen flex bg-ink-900">
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 text-white bg-gradient-to-br from-ink-900 via-ink-900 to-brand-700">
+    <div className="min-h-screen flex bg-chrome">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 text-white bg-chrome">
         <div>
-          <p className="font-display text-2xl font-semibold">ALL 10S EDU</p>
-          <p className="text-white/50 text-sm mt-1">十习生教育中心</p>
+          <p className="font-display text-2xl font-semibold">WiiTeam</p>
+                    <p className="text-white/70 text-sm mt-1">One System, All Connected</p>
         </div>
         <div className="max-w-md">
-          <h2 className="font-display text-3xl font-medium leading-snug">
-            Leave and claims,
-            <br />
-            handled in one place.
+                              <h2 className="font-body text-3xl font-medium leading-snug text-white">
+            Perfect All-in-One system for SMEs
           </h2>
-          <p className="mt-3 text-white/60 text-sm leading-relaxed">
-            Apply for leave, submit expense claims, and track approvals — built for the ALL 10S
-            team.
-          </p>
         </div>
-        <p className="text-xs text-white/30">© {new Date().getFullYear()} ALL 10S EDU</p>
+        <p className="text-xs text-white/40">© {new Date().getFullYear()} WiiTeam</p>
       </div>
 
-      <div className="flex w-full lg:w-1/2 items-center justify-center bg-sand-50 p-6">
+      <div className="flex w-full lg:w-1/2 items-center justify-center bg-white p-6">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <p className="font-display text-xl font-semibold text-ink-900">ALL 10S EDU</p>
-            <p className="text-ink-500 text-sm">Leave &amp; Claims</p>
+            <p className="font-display text-xl font-semibold text-red-800">WiiTeam</p>
+                        <p className="text-red-900/60 text-sm">One System, All Connected</p>
           </div>
 
           {!showForgot ? (
             <>
-              <h1 className="text-2xl font-semibold text-ink-900 mb-1">Welcome back</h1>
-              <p className="text-sm text-ink-500 mb-6">Sign in to continue to your dashboard.</p>
+              <h1 className="text-2xl font-semibold text-red-900 mb-1">Welcome back</h1>
+              <p className="text-sm text-red-900/60 mb-6">Sign in to continue to your dashboard.</p>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {error && <Alert tone="rose">{error}</Alert>}
                 <div>
-                  <label className="field-label" htmlFor="email">
+                  <label className={wiiLabel} htmlFor="email">
                     Work email
                   </label>
                   <input
                     id="email"
                     type="email"
                     required
-                    className="field-input"
-                    placeholder="you@all10sedu.com"
+                    className={wiiInput}
+                    placeholder="you@wiiteam.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="field-label" htmlFor="password">
+                  <label className={wiiLabel} htmlFor="password">
                     Password
                   </label>
                   <input
                     id="password"
                     type="password"
                     required
-                    className="field-input"
+                    className={wiiInput}
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-                <button type="submit" disabled={loading} className="btn-primary w-full">
+                <button type="submit" disabled={loading} className={wiiButton}>
                   {loading ? 'Signing in…' : 'Sign in'}
                 </button>
               </form>
 
-              <p className="mt-6 text-xs text-ink-500">
+              <p className="mt-6 text-xs text-red-900/60">
                 <button
                   type="button"
                   onClick={() => {
@@ -129,7 +132,7 @@ export default function Login() {
                     setResetSent(false)
                     setResetError('')
                   }}
-                  className="text-brand-600 hover:underline font-medium"
+                  className={wiiLink}
                 >
                   Forgot your password?
                 </button>{' '}
@@ -138,8 +141,8 @@ export default function Login() {
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-semibold text-ink-900 mb-1">Reset your password</h1>
-              <p className="text-sm text-ink-500 mb-6">
+              <h1 className="text-2xl font-semibold text-red-900 mb-1">Reset your password</h1>
+              <p className="text-sm text-red-900/60 mb-6">
                 Enter your email and we'll send you a link to set a new password.
               </p>
 
@@ -152,30 +155,26 @@ export default function Login() {
                 <form onSubmit={handleResetRequest} className="space-y-4">
                   {resetError && <Alert tone="rose">{resetError}</Alert>}
                   <div>
-                    <label className="field-label" htmlFor="reset-email">
+                    <label className={wiiLabel} htmlFor="reset-email">
                       Work email
                     </label>
                     <input
                       id="reset-email"
                       type="email"
                       required
-                      className="field-input"
-                      placeholder="you@all10sedu.com"
+                      className={wiiInput}
+                      placeholder="you@wiiteam.com"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
                     />
                   </div>
-                  <button type="submit" disabled={resetSending} className="btn-primary w-full">
+                  <button type="submit" disabled={resetSending} className={wiiButton}>
                     {resetSending ? 'Sending…' : 'Send reset link'}
                   </button>
                 </form>
               )}
 
-              <button
-                type="button"
-                onClick={() => setShowForgot(false)}
-                className="mt-6 text-xs text-brand-600 hover:underline font-medium"
-              >
+              <button type="button" onClick={() => setShowForgot(false)} className={`mt-6 text-xs ${wiiLink}`}>
                 ← Back to sign in
               </button>
             </>

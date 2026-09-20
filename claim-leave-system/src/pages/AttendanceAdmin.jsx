@@ -167,7 +167,7 @@ export default function AttendanceAdmin() {
     const usedNames = new Set()
     profiles.forEach((p) => {
       const rows = [
-        ['Monthly Timesheet', '', '', '', '', '', 'ALL10S ERP'],
+        ['Monthly Timesheet', '', '', '', '', '', 'WiiTeam'],
         [],
         ['Month', `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`],
         [],

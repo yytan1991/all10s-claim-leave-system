@@ -54,7 +54,7 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-sand-50 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <p className="font-display text-xl font-semibold text-ink-900">ALL10S ERP</p>
+          <p className="font-display text-xl font-semibold text-ink-900">WiiTeam</p>
           <p className="text-sm text-ink-500 mt-1">Set a new password</p>
         </div>
 

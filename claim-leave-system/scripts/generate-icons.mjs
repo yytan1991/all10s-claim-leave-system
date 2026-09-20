@@ -1,12 +1,11 @@
 import sharp from 'sharp'
 import { mkdirSync } from 'fs'
 
-// Larger, cleaner mark for app icon use (the favicon's "A" glyph, bigger canvas)
+// WiiTeam mark: dark red background, bold orange "W"
 const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#12212B"/>
-  <path d="M148 338 L216 174 H 260 L 328 338 H 284 L 270 302 H 206 L 192 338 Z M 216 268 H 260 L 238 210 Z"
-    fill="#1E8A72"/>
+  <rect width="512" height="512" rx="112" fill="#960000"/>
+  <text x="256" y="345" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="280" fill="#CD5B15" text-anchor="middle">W</text>
 </svg>
 `
 
@@ -31,7 +30,7 @@ for (const s of sizes) {
         bottom: Math.round((s.size - inner) / 2),
         left: Math.round((s.size - inner) / 2),
         right: Math.round((s.size - inner) / 2),
-        background: '#12212B',
+        background: '#960000',
       })
   }
   await img.png().toFile(s.file)

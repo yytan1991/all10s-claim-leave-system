@@ -23,12 +23,13 @@ import MyPayslips from './pages/MyPayslips'
 import PayslipsAdmin from './pages/PayslipsAdmin'
 import CashFlow from './pages/CashFlow'
 import Announcements from './pages/Announcements'
+import ClassesAdmin from './pages/ClassesAdmin'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
   return (
     <Routes>
-            <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route
@@ -183,11 +184,19 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
+            <Route
         path="/announcements"
         element={
           <ProtectedRoute>
             <Announcements />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/classes"
+        element={
+          <ProtectedRoute requireAdmin>
+            <ClassesAdmin />
           </ProtectedRoute>
         }
       />

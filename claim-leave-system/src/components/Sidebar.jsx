@@ -15,8 +15,9 @@ import {
   Users2,
   KanbanSquare,
   Receipt,
-  Wallet,
+    Wallet,
   Megaphone,
+  School,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -50,6 +51,7 @@ const managerLinks = [
 
 const adminLinks = [
   { to: '/employees', label: 'Employees', icon: Users },
+  { to: '/classes', label: 'Classes', icon: School },
   { to: '/payslips-admin', label: 'Payslips', icon: Receipt },
   { to: '/cashflow', label: 'Cash Flow', icon: Wallet },
   { to: '/settings', label: 'Settings', icon: Settings },
@@ -64,9 +66,9 @@ export default function Sidebar({ className = '' }) {
   }, [])
 
   return (
-    <aside className={`flex w-64 flex-col bg-ink-900 text-white shrink-0 h-full ${className}`}>
+    <aside className={`flex w-64 flex-col bg-chrome text-white shrink-0 h-full ${className}`}>
       <div className="px-5 py-6 border-b border-white/10">
-        <p className="font-display text-lg font-semibold leading-tight">ALL 10S</p>
+        <p className="font-display text-lg font-semibold leading-tight">WiiTeam</p>
         <p className="text-xs text-white/50 tracking-wide">ERP</p>
       </div>
 

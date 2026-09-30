@@ -13,18 +13,38 @@ export async function generateInvoicePdf(invoice, org, student) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const marginX = 40
   const pageRight = 555
-  let y = 50
+
+  // Try several likely column names since we can't verify the exact schema
+  // from here — whichever one is actually populated will be used.
+  const ssmNumber = org?.ssm_number || org?.ssm_no || org?.ssm || org?.company_reg_no || org?.registration_number
 
   doc.setFontSize(18)
   doc.setFont(undefined, 'bold')
-  doc.text(org?.name || 'Invoice', marginX, y)
+  doc.text(org?.name || 'Invoice', marginX, 50)
   doc.setFont(undefined, 'normal')
   doc.setFontSize(9)
-  y += 16
-  if (org?.ssm_number) {
-    doc.text(`SSM: ${org.ssm_number}`, marginX, y)
-    y += 12
+
+  let leftY = 66
+  if (ssmNumber) {
+    doc.text(`SSM: ${ssmNumber}`, marginX, leftY)
+    leftY += 12
   }
+
+  // "INVOICE" and its details block align with the first line of the
+  // address, not the company name.
+  const addressStartY = leftY
+
+  doc.setFontSize(16)
+  doc.setFont(undefined, 'bold')
+  doc.text('INVOICE', 400, addressStartY)
+  doc.setFont(undefined, 'normal')
+  doc.setFontSize(10)
+  doc.text(`Invoice No: INV-${String(invoice.invoice_no).padStart(5, '0')}`, 400, addressStartY + 18)
+  doc.text(`Issue Date: ${formatDate(invoice.issue_date)}`, 400, addressStartY + 32)
+  if (invoice.due_date) doc.text(`Due Date: ${formatDate(invoice.due_date)}`, 400, addressStartY + 46)
+
+  let y = addressStartY
+  doc.setFontSize(9)
   if (org?.address) {
     const addressLines = org.address
       .split(',')
@@ -41,16 +61,8 @@ export async function generateInvoicePdf(invoice, org, student) {
     y += 12
   }
 
-  doc.setFontSize(16)
-  doc.setFont(undefined, 'bold')
-  doc.text('INVOICE', 400, 50)
-  doc.setFont(undefined, 'normal')
+  y = Math.max(y, addressStartY + 46) + 24
   doc.setFontSize(10)
-  doc.text(`Invoice No: INV-${String(invoice.invoice_no).padStart(5, '0')}`, 400, 68)
-  doc.text(`Issue Date: ${formatDate(invoice.issue_date)}`, 400, 82)
-  if (invoice.due_date) doc.text(`Due Date: ${formatDate(invoice.due_date)}`, 400, 96)
-
-  y = Math.max(y, 96) + 24
   doc.setFont(undefined, 'bold')
   doc.text('Bill To:', marginX, y)
   doc.setFont(undefined, 'normal')

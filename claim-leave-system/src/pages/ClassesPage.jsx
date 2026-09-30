@@ -437,7 +437,7 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [invoiceFrequency, setInvoiceFrequency] = useState('')
+  const [perStudentFrequency, setPerStudentFrequency] = useState({})
 
   useEffect(() => {
     async function load() {
@@ -463,6 +463,10 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
       else next.add(id)
       return next
     })
+  }
+
+  function setFrequencyFor(id, value) {
+    setPerStudentFrequency((prev) => ({ ...prev, [id]: value }))
   }
 
   async function handleSave() {
@@ -500,23 +504,26 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
       }
     }
 
-    // Newly enrolled students, if a billing frequency was picked, each get
-    // their own recurring invoice plan set up automatically for this class's
-    // fee. Adjust or delete it anytime afterward from the Recurring Invoice page.
-    if (!isTeacherMode && invoiceFrequency && toAdd.length > 0) {
+    // Newly enrolled students each get their own recurring invoice plan if a
+    // billing frequency was picked for them individually. Adjust or delete
+    // any of these anytime afterward from the Recurring Invoice page.
+    const studentsWithFrequency = toAdd.filter((id) => perStudentFrequency[id])
+    if (!isTeacherMode && studentsWithFrequency.length > 0) {
       const feeAmount = Number(classItem.fee_amount || 0)
       const today = new Date().toISOString().slice(0, 10)
-      const periodLabel = computePeriodLabel(today, invoiceFrequency)
-      const planRows = toAdd.map((studentId) => ({
-        org_id: orgId,
-        student_id: studentId,
-        items: [{ description: classItem.name, amount: feeAmount }],
-        amount: feeAmount,
-        recurrence_interval_months: Number(invoiceFrequency),
-        next_generation_date: today,
-        next_invoice_month: periodLabel,
-        created_by: createdBy,
-      }))
+      const planRows = studentsWithFrequency.map((studentId) => {
+        const freq = perStudentFrequency[studentId]
+        return {
+          org_id: orgId,
+          student_id: studentId,
+          items: [{ description: classItem.name, amount: feeAmount }],
+          amount: feeAmount,
+          recurrence_interval_months: Number(freq),
+          next_generation_date: today,
+          next_invoice_month: computePeriodLabel(today, freq),
+          created_by: createdBy,
+        }
+      })
       const { error: planError } = await supabase.from('recurring_invoice_plans').insert(planRows)
       if (planError) {
         setSaving(false)
@@ -555,18 +562,34 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
             onChange={(e) => setSearch(e.target.value)}
           />
           {checked.size > 0 && <p className="text-xs text-ink-500 mb-2">{checked.size} selected</p>}
-          <div className="space-y-1 max-h-64 overflow-y-auto border border-sand-200 rounded-md p-2">
+          <div className="space-y-1 max-h-72 overflow-y-auto border border-sand-200 rounded-md p-2">
             {allMembers
               .filter((m) => m.full_name?.toLowerCase().includes(search.trim().toLowerCase()))
-              .map((m) => (
-                <label
-                  key={m.id}
-                  className="flex items-center gap-3 px-2 py-2 rounded hover:bg-sand-50 cursor-pointer text-sm"
-                >
-                  <input type="checkbox" checked={checked.has(m.id)} onChange={() => toggle(m.id)} />
-                  {m.full_name}
-                </label>
-              ))}
+              .map((m) => {
+                const isNew = checked.has(m.id) && !linkedIds.has(m.id)
+                return (
+                  <div key={m.id} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-sand-50 text-sm">
+                    <label className="flex items-center gap-3 cursor-pointer flex-1">
+                      <input type="checkbox" checked={checked.has(m.id)} onChange={() => toggle(m.id)} />
+                      {m.full_name}
+                    </label>
+                    {!isTeacherMode && isNew && (
+                      <select
+                        className="field-input text-xs py-1 w-40 shrink-0"
+                        value={perStudentFrequency[m.id] || ''}
+                        onChange={(e) => setFrequencyFor(m.id, e.target.value)}
+                      >
+                        <option value="">No invoice</option>
+                        {RECURRENCE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )
+              })}
             {allMembers.filter((m) => m.full_name?.toLowerCase().includes(search.trim().toLowerCase())).length ===
               0 && <p className="text-sm text-ink-500 px-2 py-3">No matches for "{search}".</p>}
           </div>
@@ -574,22 +597,11 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
       )}
 
       {!isTeacherMode && !loading && allMembers.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-sand-200">
-          <label className="field-label">Invoice frequency for newly enrolled students</label>
-          <select className="field-input" value={invoiceFrequency} onChange={(e) => setInvoiceFrequency(e.target.value)}>
-            <option value="">Don't create an invoice</option>
-            {RECURRENCE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-ink-500 mt-1">
-            {classItem.fee_amount != null
-              ? `Sets up a recurring invoice at RM ${Number(classItem.fee_amount).toFixed(2)} for each student newly ticked above. Only applies to students being added now, not ones already enrolled. You can edit or delete it anytime from Recurring Invoice.`
-              : 'This class has no fee set, so a recurring invoice would be RM 0.00 — set a fee on the class details above first if you want this to charge anything.'}
-          </p>
-        </div>
+        <p className="text-xs text-ink-500 mt-3">
+          {classItem.fee_amount != null
+            ? `Pick a billing frequency next to any newly-ticked student to set up a recurring invoice at RM ${Number(classItem.fee_amount).toFixed(2)} for them. Leave it on "No invoice" to skip. Only applies to students being added now — already-enrolled students are unaffected.`
+            : 'This class has no fee set, so a recurring invoice would be RM 0.00 — set a fee on the class details above first if you want billing to charge anything.'}
+        </p>
       )}
 
       <div className="flex gap-3 pt-5">

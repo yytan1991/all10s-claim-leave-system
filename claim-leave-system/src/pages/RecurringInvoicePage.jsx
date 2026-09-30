@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import { RECURRENCE_OPTIONS, formatDate } from '../lib/helpers'
 
 function frequencyLabel(months) {
@@ -381,21 +382,11 @@ export default function RecurringInvoicePage() {
               </select>
               <div>
                 <label className="text-xs text-ink-500 mb-1 block">Next Generation Date (from)</label>
-                <input
-                  type="date"
-                  className="field-input"
-                  value={filters.nextGenFrom}
-                  onChange={(e) => setFilters({ ...filters, nextGenFrom: e.target.value })}
-                />
+                <DatePicker value={filters.nextGenFrom} onChange={(v) => setFilters({ ...filters, nextGenFrom: v })} />
               </div>
               <div>
                 <label className="text-xs text-ink-500 mb-1 block">Next Generation Date (to)</label>
-                <input
-                  type="date"
-                  className="field-input"
-                  value={filters.nextGenTo}
-                  onChange={(e) => setFilters({ ...filters, nextGenTo: e.target.value })}
-                />
+                <DatePicker value={filters.nextGenTo} onChange={(v) => setFilters({ ...filters, nextGenTo: v })} />
               </div>
             </div>
             <div className="flex justify-end gap-3">
@@ -714,12 +705,7 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
           </div>
           <div>
             <label className="field-label">Next generation date</label>
-            <input
-              type="date"
-              className="field-input max-w-xs"
-              value={nextGenerationDate}
-              onChange={(e) => handleDateChange(e.target.value)}
-            />
+            <DatePicker value={nextGenerationDate} onChange={handleDateChange} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -825,7 +811,7 @@ function GenerateInvoiceModal({ plan, onClose, onGenerate }) {
             <p className="text-xs font-semibold text-ink-500 uppercase mb-2">This invoice</p>
             <div>
               <label className="field-label">Invoice date</label>
-              <input type="date" className="field-input" value={invoiceDate} onChange={(e) => handleInvoiceDateChange(e.target.value)} />
+              <DatePicker value={invoiceDate} onChange={handleInvoiceDateChange} />
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
@@ -861,7 +847,7 @@ function GenerateInvoiceModal({ plan, onClose, onGenerate }) {
             <p className="text-xs font-semibold text-ink-500 uppercase mb-2">After generating, set next to</p>
             <div>
               <label className="field-label">Next generation date</label>
-              <input type="date" className="field-input" value={nextGenDate} onChange={(e) => handleNextGenDateChange(e.target.value)} />
+              <DatePicker value={nextGenDate} onChange={handleNextGenDateChange} />
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
@@ -949,7 +935,7 @@ function BulkEditModal({ count, onClose, onSaved }) {
           </div>
           <div>
             <label className="field-label">New next generation date (optional)</label>
-            <input type="date" className="field-input" value={nextGenDate} onChange={(e) => setNextGenDate(e.target.value)} />
+            <DatePicker value={nextGenDate} onChange={setNextGenDate} />
           </div>
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">

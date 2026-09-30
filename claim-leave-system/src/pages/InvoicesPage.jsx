@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import { formatDate, RECURRENCE_OPTIONS } from '../lib/helpers'
 import { generateReceiptPdf } from '../lib/receiptPdf'
 import { generateInvoicePdf } from '../lib/invoicePdf'
@@ -366,21 +367,11 @@ export default function InvoicesPage() {
               </select>
               <div>
                 <label className="text-xs text-ink-500 mb-1 block">Issue Date (from)</label>
-                <input
-                  type="date"
-                  className="field-input"
-                  value={filters.issuedFrom}
-                  onChange={(e) => setFilters({ ...filters, issuedFrom: e.target.value })}
-                />
+                <DatePicker value={filters.issuedFrom} onChange={(v) => setFilters({ ...filters, issuedFrom: v })} />
               </div>
               <div>
                 <label className="text-xs text-ink-500 mb-1 block">Issue Date (to)</label>
-                <input
-                  type="date"
-                  className="field-input"
-                  value={filters.issuedTo}
-                  onChange={(e) => setFilters({ ...filters, issuedTo: e.target.value })}
-                />
+                <DatePicker value={filters.issuedTo} onChange={(v) => setFilters({ ...filters, issuedTo: v })} />
               </div>
               <select
                 className="field-input"
@@ -782,7 +773,7 @@ function QuickPayModal({ invoice, students, paymentMethods, onClose, onSaved }) 
             </div>
             <div>
               <label className="field-label">Payment date</label>
-              <input type="date" className="field-input" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+              <DatePicker value={paymentDate} onChange={setPaymentDate} />
             </div>
             <button type="submit" disabled={saving} className="btn-primary w-full">
               {saving ? 'Saving…' : 'Record payment'}
@@ -1185,11 +1176,11 @@ function EditInvoicePage({ invoice, students, onBack, onSaved }) {
 
             <div>
               <label className="text-xs text-ink-500 mb-1 block">Issue Date</label>
-              <input type="date" className="field-input" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+              <DatePicker value={issueDate} onChange={setIssueDate} />
             </div>
             <div>
               <label className="text-xs text-ink-500 mb-1 block">Due Date</label>
-              <input type="date" className="field-input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <DatePicker value={dueDate} onChange={setDueDate} />
             </div>
 
             <div className="md:col-span-2">
@@ -1496,7 +1487,7 @@ function CreateInvoicesPage({ orgId, createdBy, students, onBack, onSaved }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Due date</label>
-              <input type="date" className="field-input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <DatePicker value={dueDate} onChange={setDueDate} />
             </div>
             <div>
               <label className="field-label">Invoice month</label>

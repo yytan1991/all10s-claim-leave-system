@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import { formatDate } from '../lib/helpers'
 
 // classes.day_of_week uses 0 = Monday ... 6 = Sunday. JS Date#getDay() uses
@@ -228,14 +229,7 @@ export default function StudentAttendancePage() {
         </div>
         <div>
           <label className="field-label">Date</label>
-          <input
-            type="date"
-            className="field-input"
-            value={date}
-            max={todayStr()}
-            onChange={(e) => setDate(e.target.value)}
-            disabled={!isAdmin}
-          />
+          <DatePicker value={date} onChange={setDate} maxDate={todayStr()} disabled={!isAdmin} />
           {!isAdmin && <p className="text-[11px] text-ink-500 mt-1">Teachers can only mark today's attendance.</p>}
         </div>
         {isAdmin && (

@@ -20,14 +20,24 @@ export async function generateInvoicePdf(invoice, org, student) {
   doc.text(org?.name || 'Invoice', marginX, y)
   doc.setFont(undefined, 'normal')
   doc.setFontSize(9)
-  y += 18
-  if (org?.address) {
-    doc.text(org.address, marginX, y)
+  y += 16
+  if (org?.ssm_number) {
+    doc.text(`SSM: ${org.ssm_number}`, marginX, y)
     y += 12
   }
-  const orgLine = [org?.ssm_number && `SSM: ${org.ssm_number}`, org?.phone, org?.email].filter(Boolean).join('  ·  ')
-  if (orgLine) {
-    doc.text(orgLine, marginX, y)
+  if (org?.address) {
+    const addressLines = org.address
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    addressLines.forEach((line) => {
+      doc.text(line, marginX, y)
+      y += 12
+    })
+  }
+  const contactLine = [org?.phone, org?.email].filter(Boolean).join('  ·  ')
+  if (contactLine) {
+    doc.text(contactLine, marginX, y)
     y += 12
   }
 

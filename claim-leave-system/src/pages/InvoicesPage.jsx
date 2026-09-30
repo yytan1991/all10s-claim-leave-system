@@ -282,10 +282,16 @@ export default function InvoicesPage() {
   })
 
   visible = [...visible].sort((a, b) => {
-    let av = a[sortField]
-    let bv = b[sortField]
-    if (av == null) av = sortField === 'invoice_no' ? 0 : ''
-    if (bv == null) bv = sortField === 'invoice_no' ? 0 : ''
+    let av, bv
+    if (sortField === 'student_name') {
+      av = a.students?.full_name || ''
+      bv = b.students?.full_name || ''
+    } else {
+      av = a[sortField]
+      bv = b[sortField]
+      if (av == null) av = sortField === 'invoice_no' ? 0 : ''
+      if (bv == null) bv = sortField === 'invoice_no' ? 0 : ''
+    }
     if (av < bv) return sortDir === 'asc' ? -1 : 1
     if (av > bv) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -442,7 +448,12 @@ export default function InvoicesPage() {
                   <input type="checkbox" checked={selected.size === visible.length} onChange={toggleSelectAll} />
                 </th>
                 <SortHeader label="No." field="invoice_no" sortField={sortField} sortDir={sortDir} onSort={onSort} widthClass="w-[8%]" />
-                <th className="px-2 py-2 font-medium w-[13%]">Student</th>
+                <th className="px-2 py-2 font-medium w-[13%]">
+                  <button onClick={() => onSort('student_name')} className="inline-flex items-center gap-1 hover:text-ink-900">
+                    Student
+                    {sortField === 'student_name' ? sortDir === 'desc' ? <ArrowDown size={11} /> : <ArrowUp size={11} /> : null}
+                  </button>
+                </th>
                 <th className="px-2 py-2 font-medium w-[30%]">Description</th>
                 <th className="px-2 py-2 font-medium w-[13%]">Amount</th>
                 <SortHeader label="Issued" field="issue_date" sortField={sortField} sortDir={sortDir} onSort={onSort} widthClass="w-[9%]" />

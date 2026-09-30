@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Trash2, X, Play, Pencil, CalendarClock, ChevronDown, ChevronUp, ArrowLeft, MoreVertical } from 'lucide-react'
+import { Plus, Trash2, X, Play, Pencil, CalendarClock, ChevronDown, ChevronUp, ArrowLeft, MoreVertical, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
@@ -162,6 +162,8 @@ export default function RecurringInvoicePage() {
   const [showFilters, setShowFilters] = useState(true)
   const [filters, setFilters] = useState(emptyFilters)
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters)
+  const [sortField, setSortField] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
   const [bulkEditing, setBulkEditing] = useState(false)
 
   async function load() {
@@ -276,7 +278,16 @@ export default function RecurringInvoicePage() {
     setAppliedFilters(emptyFilters)
   }
 
-  const visible = plans.filter((p) => {
+  function onSort(field) {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  let visible = plans.filter((p) => {
     const f = appliedFilters
     if (f.studentName && !p.students?.full_name?.toLowerCase().includes(f.studentName.toLowerCase())) return false
     if (f.description) {
@@ -292,6 +303,22 @@ export default function RecurringInvoicePage() {
     if (f.frequency && String(p.recurrence_interval_months) !== f.frequency) return false
     return true
   })
+
+  if (sortField) {
+    visible = [...visible].sort((a, b) => {
+      let av, bv
+      if (sortField === 'student_name') {
+        av = a.students?.full_name || ''
+        bv = b.students?.full_name || ''
+      } else {
+        av = a[sortField] || ''
+        bv = b[sortField] || ''
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }
 
   if (view === 'create' || view === 'edit') {
     return (
@@ -421,11 +448,21 @@ export default function RecurringInvoicePage() {
                 <th className="px-2 py-2 w-[4%]">
                   <input type="checkbox" checked={selected.size === visible.length} onChange={toggleSelectAll} />
                 </th>
-                <th className="px-2 py-2 font-medium w-[14%]">Student</th>
+                <th className="px-2 py-2 font-medium w-[14%]">
+                  <button onClick={() => onSort('student_name')} className="inline-flex items-center gap-1 hover:text-ink-900">
+                    Student
+                    {sortField === 'student_name' ? sortDir === 'desc' ? <ArrowDown size={11} /> : <ArrowUp size={11} /> : null}
+                  </button>
+                </th>
                 <th className="px-2 py-2 font-medium w-[27%]">Description</th>
                 <th className="px-2 py-2 font-medium w-[11%]">Amount</th>
                 <th className="px-2 py-2 font-medium w-[11%]">Frequency</th>
-                <th className="px-2 py-2 font-medium w-[12%]">Next Gen</th>
+                <th className="px-2 py-2 font-medium w-[12%]">
+                  <button onClick={() => onSort('next_generation_date')} className="inline-flex items-center gap-1 hover:text-ink-900">
+                    Next Gen
+                    {sortField === 'next_generation_date' ? sortDir === 'desc' ? <ArrowDown size={11} /> : <ArrowUp size={11} /> : null}
+                  </button>
+                </th>
                 <th className="px-2 py-2 font-medium w-[15%]">Next Month</th>
                 <th className="px-2 py-2 font-medium w-[6%]" />
               </tr>

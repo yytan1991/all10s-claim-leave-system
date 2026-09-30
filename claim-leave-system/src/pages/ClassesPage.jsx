@@ -4,7 +4,19 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
-import { DAY_NAMES, formatTimeLabel } from '../lib/helpers'
+import { DAY_NAMES, formatTimeLabel, RECURRENCE_OPTIONS } from '../lib/helpers'
+
+function computePeriodLabel(dateStr, intervalMonths) {
+  if (!dateStr) return ''
+  const start = new Date(`${dateStr}T00:00:00`)
+  const startLabel = start.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })
+  const months = Number(intervalMonths) || 1
+  if (months <= 1) return startLabel
+  const end = new Date(start)
+  end.setMonth(end.getMonth() + months - 1)
+  const endLabel = end.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })
+  return `${startLabel} - ${endLabel}`
+}
 
 export default function ClassesPage() {
   const { profile } = useAuth()
@@ -425,6 +437,7 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [invoiceFrequency, setInvoiceFrequency] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -487,6 +500,31 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
       }
     }
 
+    // Newly enrolled students, if a billing frequency was picked, each get
+    // their own recurring invoice plan set up automatically for this class's
+    // fee. Adjust or delete it anytime afterward from the Recurring Invoice page.
+    if (!isTeacherMode && invoiceFrequency && toAdd.length > 0) {
+      const feeAmount = Number(classItem.fee_amount || 0)
+      const today = new Date().toISOString().slice(0, 10)
+      const periodLabel = computePeriodLabel(today, invoiceFrequency)
+      const planRows = toAdd.map((studentId) => ({
+        org_id: orgId,
+        student_id: studentId,
+        items: [{ description: classItem.name, amount: feeAmount }],
+        amount: feeAmount,
+        recurrence_interval_months: Number(invoiceFrequency),
+        next_generation_date: today,
+        next_invoice_month: periodLabel,
+        created_by: createdBy,
+      }))
+      const { error: planError } = await supabase.from('recurring_invoice_plans').insert(planRows)
+      if (planError) {
+        setSaving(false)
+        setError(`Enrollment saved, but creating recurring invoices failed: ${planError.message}`)
+        return
+      }
+    }
+
     setSaving(false)
     onSaved()
   }
@@ -533,6 +571,25 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
               0 && <p className="text-sm text-ink-500 px-2 py-3">No matches for "{search}".</p>}
           </div>
         </>
+      )}
+
+      {!isTeacherMode && !loading && allMembers.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-sand-200">
+          <label className="field-label">Invoice frequency for newly enrolled students</label>
+          <select className="field-input" value={invoiceFrequency} onChange={(e) => setInvoiceFrequency(e.target.value)}>
+            <option value="">Don't create an invoice</option>
+            {RECURRENCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-ink-500 mt-1">
+            {classItem.fee_amount != null
+              ? `Sets up a recurring invoice at RM ${Number(classItem.fee_amount).toFixed(2)} for each student newly ticked above. Only applies to students being added now, not ones already enrolled. You can edit or delete it anytime from Recurring Invoice.`
+              : 'This class has no fee set, so a recurring invoice would be RM 0.00 — set a fee on the class details above first if you want this to charge anything.'}
+          </p>
+        </div>
       )}
 
       <div className="flex gap-3 pt-5">

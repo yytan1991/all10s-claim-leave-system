@@ -32,13 +32,13 @@ let savedScrollTop = 0
 const staffLinks = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
-  { to: '/attendance', label: 'Attendance', icon: Clock },
+  { to: '/attendance', label: 'Attendance', icon: Clock, end: true },
   { to: '/leave/apply', label: 'Apply Leave', icon: CalendarPlus },
-  { to: '/leave', label: 'My Leave', icon: CalendarDays },
+  { to: '/leave', label: 'My Leave', icon: CalendarDays, end: true },
   { to: '/team-calendar', label: 'Team Calendar', icon: CalendarRange },
   { to: '/claims/new', label: 'New Claim', icon: ReceiptText },
-  { to: '/claims', label: 'My Claims', icon: FileStack },
-  { to: '/payslips', label: 'My Payslips', icon: Receipt },
+  { to: '/claims', label: 'My Claims', icon: FileStack, end: true },
+  { to: '/payslips', label: 'My Payslips', icon: Receipt, end: true },
 ]
 
 const studentMgmtLinks = [

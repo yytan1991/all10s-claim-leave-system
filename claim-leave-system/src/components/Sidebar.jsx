@@ -50,6 +50,8 @@ const studentMgmtLinks = [
   { to: '/invoices', label: 'Invoice', icon: Receipt },
   { to: '/recurring-invoice', label: 'Recurring Invoice', icon: CalendarClock },
   { to: '/invoice-settings', label: 'Invoice Setting', icon: Settings },
+  { to: '/registration-approvals', label: 'Registration Approvals', icon: ClipboardList },
+  { to: '/parent-student-accounts', label: 'Parent/Student Accounts', icon: Users2 },
 ]
 
 const teacherStudentMgmtLinks = [

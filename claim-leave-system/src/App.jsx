@@ -32,7 +32,16 @@ import TeachersPage from './pages/TeachersPage'
 import InvoicesPage from './pages/InvoicesPage'
 import InvoiceSettingsPage from './pages/InvoiceSettingsPage'
 import RecurringInvoicePage from './pages/RecurringInvoicePage'
+import ParentStudentAccountsPage from './pages/ParentStudentAccountsPage'
+import RegistrationApprovalsPage from './pages/RegistrationApprovalsPage'
+import PublicRegistration from './pages/PublicRegistration'
+import ParentLogin from './pages/ParentLogin'
+import StudentLogin from './pages/StudentLogin'
+import ParentPortal from './pages/ParentPortal'
+import StudentPortal from './pages/StudentPortal'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { PortalRoute } from './components/PortalRoute'
+import { PortalAuthProvider } from './context/PortalAuthContext'
 
 export default function App() {
   return (
@@ -294,6 +303,62 @@ export default function App() {
           <ProtectedRoute requireSuperadmin>
             <SuperadminUsers />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/parent-student-accounts"
+        element={
+          <ProtectedRoute requireAdmin>
+            <ParentStudentAccountsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/registration-approvals"
+        element={
+          <ProtectedRoute requireAdmin>
+            <RegistrationApprovalsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/register" element={<PublicRegistration />} />
+
+      {/* Parent & Student portals — completely separate login, isolated
+          from staff auth via their own PortalAuthProvider per route. */}
+      <Route
+        path="/parent-login"
+        element={
+          <PortalAuthProvider>
+            <ParentLogin />
+          </PortalAuthProvider>
+        }
+      />
+      <Route
+        path="/student-login"
+        element={
+          <PortalAuthProvider>
+            <StudentLogin />
+          </PortalAuthProvider>
+        }
+      />
+      <Route
+        path="/parent-portal"
+        element={
+          <PortalAuthProvider>
+            <PortalRoute requireType="parent">
+              <ParentPortal />
+            </PortalRoute>
+          </PortalAuthProvider>
+        }
+      />
+      <Route
+        path="/student-portal"
+        element={
+          <PortalAuthProvider>
+            <PortalRoute requireType="student">
+              <StudentPortal />
+            </PortalRoute>
+          </PortalAuthProvider>
         }
       />
     </Routes>

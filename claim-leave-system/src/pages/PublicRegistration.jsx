@@ -1,0 +1,171 @@
+import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { supabase, createSignupClient } from '../lib/supabaseClient'
+import { Alert } from '../components/UI'
+
+export default function PublicRegistration() {
+  const [searchParams] = useSearchParams()
+  const orgId = searchParams.get('org')
+
+  const [parentFullName, setParentFullName] = useState('')
+  const [parentEmail, setParentEmail] = useState('')
+  const [parentPhone, setParentPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [studentFullName, setStudentFullName] = useState('')
+  const [studentDob, setStudentDob] = useState('')
+  const [studentNotes, setStudentNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  if (!orgId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-sand-50 px-4">
+        <div className="card max-w-sm p-6 text-center">
+          <p className="text-sm text-ink-700">
+            This registration link is missing its centre reference. Please ask the centre for the correct link.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+
+    if (!parentFullName.trim() || !parentEmail.trim() || password.length < 6) {
+      setError('Fill in your name, email, and a password of at least 6 characters.')
+      return
+    }
+    if (!studentFullName.trim()) {
+      setError("Please enter your child's name.")
+      return
+    }
+
+    setSubmitting(true)
+
+    // Create the parent's login account right away (so the password is
+    // stored securely by Supabase) — but nothing is usable in the portal
+    // until an admin approves the registration below.
+    const signupClient = createSignupClient()
+    const { data: signupData, error: signupError } = await signupClient.auth.signUp({
+      email: parentEmail.trim(),
+      password,
+    })
+    if (signupError) {
+      setSubmitting(false)
+      setError(signupError.message)
+      return
+    }
+    const userId = signupData.user?.id
+    if (!userId) {
+      setSubmitting(false)
+      setError('Could not create your login. Please try again.')
+      return
+    }
+
+    const { error: insertError } = await supabase.from('registration_requests').insert({
+      org_id: orgId,
+      parent_full_name: parentFullName.trim(),
+      parent_email: parentEmail.trim(),
+      parent_phone: parentPhone || null,
+      parent_auth_user_id: userId,
+      student_full_name: studentFullName.trim(),
+      student_dob: studentDob || null,
+      student_notes: studentNotes || null,
+    })
+
+    setSubmitting(false)
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+    setSuccess(true)
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-sand-50 px-4">
+        <div className="card max-w-sm p-6 text-center">
+          <h1 className="text-lg font-semibold text-ink-900 mb-2">Registration submitted</h1>
+          <p className="text-sm text-ink-700">
+            Thanks! Your registration is now pending review. Once approved, you can sign in at the parent portal
+            using the email and password you just set.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-sand-50 px-4 py-10">
+      <div className="max-w-lg mx-auto">
+        <div className="card p-6 sm:p-8">
+          <h1 className="text-xl font-semibold text-ink-900 mb-1">Student Registration</h1>
+          <p className="text-sm text-ink-500 mb-6">
+            Fill in your details and your child's details below. Our team will review and approve your registration.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && <Alert tone="rose">{error}</Alert>}
+
+            <div>
+              <h2 className="text-sm font-semibold text-ink-900 mb-3">Parent / Guardian Details</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="field-label">Full name</label>
+                  <input className="field-input" value={parentFullName} onChange={(e) => setParentFullName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">Email</label>
+                  <input type="email" className="field-input" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">Phone number</label>
+                  <input className="field-input" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} placeholder="012-345 6789" />
+                </div>
+                <div>
+                  <label className="field-label">Set a password for your portal login</label>
+                  <input
+                    type="password"
+                    className="field-input"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-sm font-semibold text-ink-900 mb-3">Student Details</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="field-label">Student's full name</label>
+                  <input className="field-input" value={studentFullName} onChange={(e) => setStudentFullName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">Date of birth (optional)</label>
+                  <input type="date" className="field-input" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">Anything else we should know? (optional)</label>
+                  <textarea
+                    className="field-input min-h-[70px]"
+                    value={studentNotes}
+                    onChange={(e) => setStudentNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" disabled={submitting} className="btn-primary w-full">
+              {submitting ? 'Submitting…' : 'Submit registration'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}

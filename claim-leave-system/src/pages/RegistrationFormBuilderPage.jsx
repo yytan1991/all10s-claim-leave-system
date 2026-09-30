@@ -44,16 +44,29 @@ export default function RegistrationFormBuilderPage() {
   }
 
   async function moveField(field, direction) {
-    const sectionFields = fields.filter((f) => f.section === field.section)
+    setError('')
+    const sectionFields = [...fields.filter((f) => f.section === field.section)].sort(
+      (a, b) => a.sort_order - b.sort_order
+    )
     const idx = sectionFields.findIndex((f) => f.id === field.id)
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= sectionFields.length) return
-    const other = sectionFields[swapIdx]
 
-    await Promise.all([
-      supabase.from('registration_form_fields').update({ sort_order: other.sort_order }).eq('id', field.id),
-      supabase.from('registration_form_fields').update({ sort_order: field.sort_order }).eq('id', other.id),
-    ])
+    // Swap positions, then re-write sequential sort_order (0, 1, 2, ...)
+    // for the whole section. This is self-correcting even if the stored
+    // values ever drifted or duplicated, instead of just swapping two
+    // raw numbers that might not actually be adjacent/unique.
+    const reordered = [...sectionFields]
+    ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]]
+
+    const results = await Promise.all(
+      reordered.map((f, i) => supabase.from('registration_form_fields').update({ sort_order: i }).eq('id', f.id))
+    )
+    const failed = results.find((r) => r.error)
+    if (failed) {
+      setError(failed.error.message)
+      return
+    }
     load()
   }
 
@@ -148,7 +161,7 @@ export default function RegistrationFormBuilderPage() {
         <FieldModal
           orgId={profile.org_id}
           field={editingField}
-          existingCount={fields.filter((f) => f.section === editingField.section).length}
+          nextSortOrder={Math.max(-1, ...fields.filter((f) => f.section === editingField.section).map((f) => f.sort_order)) + 1}
           onClose={() => setEditingField(null)}
           onSaved={() => {
             setEditingField(null)
@@ -160,7 +173,7 @@ export default function RegistrationFormBuilderPage() {
   )
 }
 
-function FieldModal({ orgId, field, existingCount, onClose, onSaved }) {
+function FieldModal({ orgId, field, nextSortOrder, onClose, onSaved }) {
   const isEdit = Boolean(field.id)
   const [label, setLabel] = useState(field.label || '')
   const [fieldType, setFieldType] = useState(field.field_type || 'text')
@@ -193,7 +206,7 @@ function FieldModal({ orgId, field, existingCount, onClose, onSaved }) {
 
     const { error: saveError } = isEdit
       ? await supabase.from('registration_form_fields').update(payload).eq('id', field.id)
-      : await supabase.from('registration_form_fields').insert({ ...payload, sort_order: existingCount })
+      : await supabase.from('registration_form_fields').insert({ ...payload, sort_order: nextSortOrder })
 
     setSaving(false)
     if (saveError) {

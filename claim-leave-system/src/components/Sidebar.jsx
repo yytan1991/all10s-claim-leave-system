@@ -7,6 +7,7 @@ import {
   ReceiptText,
   FileStack,
   ClipboardCheck,
+  ClipboardList,
   Users,
   Settings,
   Clock,
@@ -38,6 +39,10 @@ const staffLinks = [
   { to: '/claims/new', label: 'New Claim', icon: ReceiptText },
   { to: '/claims', label: 'My Claims', icon: FileStack },
   { to: '/payslips', label: 'My Payslips', icon: Receipt },
+]
+
+const teachingLinks = [
+  { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
 ]
 
 const crmLinks = [
@@ -100,6 +105,18 @@ export default function Sidebar({ className = '' }) {
             key={to}
             to={to}
             end={end}
+            className={({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link')}
+          >
+            <Icon size={17} strokeWidth={2} />
+            {label}
+          </NavLink>
+        ))}
+
+        <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Teaching</p>
+        {teachingLinks.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
             className={({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link')}
           >
             <Icon size={17} strokeWidth={2} />

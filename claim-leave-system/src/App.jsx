@@ -11,6 +11,7 @@ import Employees from './pages/Employees'
 import SettingsTypes from './pages/SettingsTypes'
 import Attendance from './pages/Attendance'
 import AttendanceAdmin from './pages/AttendanceAdmin'
+import StudentAttendancePage from './pages/StudentAttendancePage'
 import TeamCalendar from './pages/TeamCalendar'
 import CrmDashboard from './pages/CrmDashboard'
 import StudentDashboard from './pages/StudentDashboard'
@@ -92,6 +93,14 @@ export default function App() {
         element={
           <ProtectedRoute requireManager>
             <AttendanceAdmin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student-attendance"
+        element={
+          <ProtectedRoute>
+            <StudentAttendancePage />
           </ProtectedRoute>
         }
       />

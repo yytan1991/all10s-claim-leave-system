@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase, createSignupClient } from '../lib/supabaseClient'
 import { Alert } from '../components/UI'
@@ -12,11 +12,31 @@ export default function PublicRegistration() {
   const [parentPhone, setParentPhone] = useState('')
   const [password, setPassword] = useState('')
   const [studentFullName, setStudentFullName] = useState('')
-  const [studentDob, setStudentDob] = useState('')
-  const [studentNotes, setStudentNotes] = useState('')
+  const [customAnswers, setCustomAnswers] = useState({})
+  const [parentFields, setParentFields] = useState([])
+  const [studentFields, setStudentFields] = useState([])
+  const [loadingFields, setLoadingFields] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    if (!orgId) {
+      setLoadingFields(false)
+      return
+    }
+    supabase
+      .from('registration_form_fields')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('section')
+      .order('sort_order')
+      .then(({ data }) => {
+        setParentFields((data || []).filter((f) => f.section === 'parent'))
+        setStudentFields((data || []).filter((f) => f.section === 'student'))
+        setLoadingFields(false)
+      })
+  }, [orgId])
 
   if (!orgId) {
     return (
@@ -30,6 +50,10 @@ export default function PublicRegistration() {
     )
   }
 
+  function setAnswer(fieldId, value) {
+    setCustomAnswers((prev) => ({ ...prev, [fieldId]: value }))
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
@@ -41,6 +65,12 @@ export default function PublicRegistration() {
     if (!studentFullName.trim()) {
       setError("Please enter your child's name.")
       return
+    }
+    for (const f of [...parentFields, ...studentFields]) {
+      if (f.required && !customAnswers[f.id]?.toString().trim()) {
+        setError(`Please answer: ${f.label}`)
+        return
+      }
     }
 
     setSubmitting(true)
@@ -72,8 +102,7 @@ export default function PublicRegistration() {
       parent_phone: parentPhone || null,
       parent_auth_user_id: userId,
       student_full_name: studentFullName.trim(),
-      student_dob: studentDob || null,
-      student_notes: studentNotes || null,
+      custom_answers: customAnswers,
     })
 
     setSubmitting(false)
@@ -107,65 +136,106 @@ export default function PublicRegistration() {
             Fill in your details and your child's details below. Our team will review and approve your registration.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && <Alert tone="rose">{error}</Alert>}
+          {loadingFields ? (
+            <p className="text-sm text-ink-500">Loading…</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && <Alert tone="rose">{error}</Alert>}
 
-            <div>
-              <h2 className="text-sm font-semibold text-ink-900 mb-3">Parent / Guardian Details</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="field-label">Full name</label>
-                  <input className="field-input" value={parentFullName} onChange={(e) => setParentFullName(e.target.value)} />
-                </div>
-                <div>
-                  <label className="field-label">Email</label>
-                  <input type="email" className="field-input" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
-                </div>
-                <div>
-                  <label className="field-label">Phone number</label>
-                  <input className="field-input" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} placeholder="012-345 6789" />
-                </div>
-                <div>
-                  <label className="field-label">Set a password for your portal login</label>
-                  <input
-                    type="password"
-                    className="field-input"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
-                  />
+              <div>
+                <h2 className="text-sm font-semibold text-ink-900 mb-3">Parent / Guardian Details</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="field-label">Full name</label>
+                    <input className="field-input" value={parentFullName} onChange={(e) => setParentFullName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label">Email</label>
+                    <input type="email" className="field-input" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label">Phone number</label>
+                    <input className="field-input" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} placeholder="012-345 6789" />
+                  </div>
+                  <div>
+                    <label className="field-label">Set a password for your portal login</label>
+                    <input
+                      type="password"
+                      className="field-input"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                    />
+                  </div>
+                  {parentFields.map((f) => (
+                    <DynamicField key={f.id} field={f} value={customAnswers[f.id]} onChange={(v) => setAnswer(f.id, v)} />
+                  ))}
                 </div>
               </div>
-            </div>
 
-            <div>
-              <h2 className="text-sm font-semibold text-ink-900 mb-3">Student Details</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="field-label">Student's full name</label>
-                  <input className="field-input" value={studentFullName} onChange={(e) => setStudentFullName(e.target.value)} />
-                </div>
-                <div>
-                  <label className="field-label">Date of birth (optional)</label>
-                  <input type="date" className="field-input" value={studentDob} onChange={(e) => setStudentDob(e.target.value)} />
-                </div>
-                <div>
-                  <label className="field-label">Anything else we should know? (optional)</label>
-                  <textarea
-                    className="field-input min-h-[70px]"
-                    value={studentNotes}
-                    onChange={(e) => setStudentNotes(e.target.value)}
-                  />
+              <div>
+                <h2 className="text-sm font-semibold text-ink-900 mb-3">Student Details</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="field-label">Student's full name</label>
+                    <input className="field-input" value={studentFullName} onChange={(e) => setStudentFullName(e.target.value)} />
+                  </div>
+                  {studentFields.map((f) => (
+                    <DynamicField key={f.id} field={f} value={customAnswers[f.id]} onChange={(v) => setAnswer(f.id, v)} />
+                  ))}
                 </div>
               </div>
-            </div>
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full">
-              {submitting ? 'Submitting…' : 'Submit registration'}
-            </button>
-          </form>
+              <button type="submit" disabled={submitting} className="btn-primary w-full">
+                {submitting ? 'Submitting…' : 'Submit registration'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function DynamicField({ field, value, onChange }) {
+  const label = (
+    <label className="field-label">
+      {field.label} {field.required && <span className="text-rose-500">*</span>}
+    </label>
+  )
+
+  if (field.field_type === 'textarea') {
+    return (
+      <div>
+        {label}
+        <textarea className="field-input min-h-[70px]" value={value || ''} onChange={(e) => onChange(e.target.value)} />
+      </div>
+    )
+  }
+  if (field.field_type === 'select') {
+    return (
+      <div>
+        {label}
+        <select className="field-input" value={value || ''} onChange={(e) => onChange(e.target.value)}>
+          <option value="">— Select —</option>
+          {(field.options || []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+  return (
+    <div>
+      {label}
+      <input
+        type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+        className="field-input"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   )
 }

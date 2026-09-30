@@ -34,6 +34,7 @@ import InvoiceSettingsPage from './pages/InvoiceSettingsPage'
 import RecurringInvoicePage from './pages/RecurringInvoicePage'
 import ParentStudentAccountsPage from './pages/ParentStudentAccountsPage'
 import RegistrationApprovalsPage from './pages/RegistrationApprovalsPage'
+import RegistrationFormBuilderPage from './pages/RegistrationFormBuilderPage'
 import PublicRegistration from './pages/PublicRegistration'
 import ParentLogin from './pages/ParentLogin'
 import StudentLogin from './pages/StudentLogin'
@@ -318,6 +319,14 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <RegistrationApprovalsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/registration-form-builder"
+        element={
+          <ProtectedRoute requireAdmin>
+            <RegistrationFormBuilderPage />
           </ProtectedRoute>
         }
       />

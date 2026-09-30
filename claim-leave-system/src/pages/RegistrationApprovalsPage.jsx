@@ -21,6 +21,7 @@ export default function RegistrationApprovalsPage() {
   const { profile } = useAuth()
   const [tab, setTab] = useState('pending')
   const [requests, setRequests] = useState([])
+  const [fieldLabels, setFieldLabels] = useState({})
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
   const [error, setError] = useState('')
@@ -29,6 +30,16 @@ export default function RegistrationApprovalsPage() {
 
   async function load() {
     setLoading(true)
+    const { data: fieldData } = await supabase
+      .from('registration_form_fields')
+      .select('id, label')
+      .eq('org_id', profile.org_id)
+    const labelMap = {}
+    ;(fieldData || []).forEach((f) => {
+      labelMap[f.id] = f.label
+    })
+    setFieldLabels(labelMap)
+
     const { data } = await supabase
       .from('registration_requests')
       .select('*')
@@ -184,6 +195,14 @@ export default function RegistrationApprovalsPage() {
                   <p className="text-sm font-medium text-ink-900">{r.student_full_name}</p>
                   {r.student_dob && <p className="text-xs text-ink-500">DOB: {formatDate(r.student_dob)}</p>}
                   {r.student_notes && <p className="text-xs text-ink-500 mt-1">{r.student_notes}</p>}
+                  {r.custom_answers &&
+                    Object.entries(r.custom_answers)
+                      .filter(([, v]) => v)
+                      .map(([fieldId, v]) => (
+                        <p key={fieldId} className="text-xs text-ink-600 mt-1">
+                          <span className="text-ink-500">{fieldLabels[fieldId] || 'Question'}:</span> {v}
+                        </p>
+                      ))}
                 </div>
               </div>
               <p className="text-xs text-ink-400 mb-3">Submitted {formatDate(r.created_at?.slice(0, 10))}</p>

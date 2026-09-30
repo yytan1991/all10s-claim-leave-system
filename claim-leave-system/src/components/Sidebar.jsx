@@ -8,6 +8,7 @@ import {
   FileStack,
   ClipboardCheck,
   ClipboardList,
+  Pencil,
   Users,
   Settings,
   Clock,
@@ -51,6 +52,7 @@ const studentMgmtLinks = [
   { to: '/recurring-invoice', label: 'Recurring Invoice', icon: CalendarClock },
   { to: '/invoice-settings', label: 'Invoice Setting', icon: Settings },
   { to: '/registration-approvals', label: 'Registration Approvals', icon: ClipboardList },
+  { to: '/registration-form-builder', label: 'Registration Form Builder', icon: Pencil },
   { to: '/parent-student-accounts', label: 'Parent/Student Accounts', icon: Users2 },
 ]
 

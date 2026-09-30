@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, X, Pencil, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Trash2, X, Pencil, GripVertical, ArrowUp, ArrowDown, Eye } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
@@ -111,6 +111,17 @@ export default function RegistrationFormBuilderPage() {
 
   return (
     <AppLayout title="Registration Form Builder" subtitle="Add, edit, remove, and reorder extra questions on your public registration form.">
+      <div className="flex justify-end mb-4">
+        <a
+          href={`/register?org=${profile.org_id}&preview=1`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary text-sm"
+        >
+          <Eye size={15} /> Preview form
+        </a>
+      </div>
+
       <Alert tone="amber">
         Parent name, email, phone, password, and the student's name always appear on the form and can't be removed — they're
         needed to create the login. Anything you add below appears as extra questions.

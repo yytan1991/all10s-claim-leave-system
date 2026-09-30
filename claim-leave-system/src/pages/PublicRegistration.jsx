@@ -6,6 +6,7 @@ import { Alert } from '../components/UI'
 export default function PublicRegistration() {
   const [searchParams] = useSearchParams()
   const orgId = searchParams.get('org')
+  const isPreview = searchParams.get('preview') === '1'
 
   const [parentFullName, setParentFullName] = useState('')
   const [parentEmail, setParentEmail] = useState('')
@@ -57,6 +58,11 @@ export default function PublicRegistration() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+
+    if (isPreview) {
+      setError('This is a preview — submission is disabled here. Use the real registration link to actually submit.')
+      return
+    }
 
     if (!parentFullName.trim() || !parentEmail.trim() || password.length < 6) {
       setError('Fill in your name, email, and a password of at least 6 characters.')
@@ -131,6 +137,11 @@ export default function PublicRegistration() {
     <div className="min-h-screen bg-sand-50 px-4 py-10">
       <div className="max-w-lg mx-auto">
         <div className="card p-6 sm:p-8">
+          {isPreview && (
+            <div className="mb-4 bg-amber-50 text-amber-700 text-sm rounded-md px-3 py-2">
+              Preview mode — this is exactly what parents will see. Submission is disabled here.
+            </div>
+          )}
           <h1 className="text-xl font-semibold text-ink-900 mb-1">Student Registration</h1>
           <p className="text-sm text-ink-500 mb-6">
             Fill in your details and your child's details below. Our team will review and approve your registration.
@@ -187,7 +198,7 @@ export default function PublicRegistration() {
               </div>
 
               <button type="submit" disabled={submitting} className="btn-primary w-full">
-                {submitting ? 'Submitting…' : 'Submit registration'}
+                {submitting ? 'Submitting…' : isPreview ? 'Submit registration (disabled in preview)' : 'Submit registration'}
               </button>
             </form>
           )}

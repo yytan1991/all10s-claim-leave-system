@@ -11,6 +11,7 @@ const FIELD_TYPES = [
   { value: 'number', label: 'Number' },
   { value: 'date', label: 'Date' },
   { value: 'select', label: 'Dropdown (choose one)' },
+  { value: 'image', label: 'Photo / Image upload' },
 ]
 
 export default function RegistrationFormBuilderPage() {

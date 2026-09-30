@@ -14,6 +14,7 @@ export default function PublicRegistration() {
   const [password, setPassword] = useState('')
   const [studentFullName, setStudentFullName] = useState('')
   const [customAnswers, setCustomAnswers] = useState({})
+  const [uploadingFields, setUploadingFields] = useState({})
   const [parentFields, setParentFields] = useState([])
   const [studentFields, setStudentFields] = useState([])
   const [loadingFields, setLoadingFields] = useState(true)
@@ -53,6 +54,21 @@ export default function PublicRegistration() {
 
   function setAnswer(fieldId, value) {
     setCustomAnswers((prev) => ({ ...prev, [fieldId]: value }))
+  }
+
+  async function handleFileChange(fieldId, file) {
+    if (!file) return
+    setError('')
+    setUploadingFields((prev) => ({ ...prev, [fieldId]: true }))
+    const path = `${orgId}/${Date.now()}-${file.name}`
+    const { error: uploadError } = await supabase.storage.from('registration-attachments').upload(path, file)
+    setUploadingFields((prev) => ({ ...prev, [fieldId]: false }))
+    if (uploadError) {
+      setError(`Could not upload photo: ${uploadError.message}`)
+      return
+    }
+    const { data: urlData } = supabase.storage.from('registration-attachments').getPublicUrl(path)
+    setAnswer(fieldId, urlData.publicUrl)
   }
 
   async function handleSubmit(e) {
@@ -179,7 +195,7 @@ export default function PublicRegistration() {
                     />
                   </div>
                   {parentFields.map((f) => (
-                    <DynamicField key={f.id} field={f} value={customAnswers[f.id]} onChange={(v) => setAnswer(f.id, v)} />
+                    <DynamicField key={f.id} field={f} value={customAnswers[f.id]} onChange={(v) => setAnswer(f.id, v)} onFileSelect={(file) => handleFileChange(f.id, file)} uploading={uploadingFields[f.id]} />
                   ))}
                 </div>
               </div>
@@ -192,7 +208,7 @@ export default function PublicRegistration() {
                     <input className="field-input" value={studentFullName} onChange={(e) => setStudentFullName(e.target.value)} />
                   </div>
                   {studentFields.map((f) => (
-                    <DynamicField key={f.id} field={f} value={customAnswers[f.id]} onChange={(v) => setAnswer(f.id, v)} />
+                    <DynamicField key={f.id} field={f} value={customAnswers[f.id]} onChange={(v) => setAnswer(f.id, v)} onFileSelect={(file) => handleFileChange(f.id, file)} uploading={uploadingFields[f.id]} />
                   ))}
                 </div>
               </div>
@@ -208,13 +224,35 @@ export default function PublicRegistration() {
   )
 }
 
-function DynamicField({ field, value, onChange }) {
+function DynamicField({ field, value, onChange, onFileSelect, uploading }) {
   const label = (
     <label className="field-label">
       {field.label} {field.required && <span className="text-rose-500">*</span>}
     </label>
   )
 
+  if (field.field_type === 'image') {
+    return (
+      <div>
+        {label}
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="field-input file:mr-3 file:rounded file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-brand-700"
+          onChange={(e) => onFileSelect(e.target.files?.[0] || null)}
+        />
+        <p className="text-xs text-ink-500 mt-1">On a phone, this lets you take a photo directly or choose one from your gallery.</p>
+        {uploading && <p className="text-xs text-ink-500 mt-1">Uploading…</p>}
+        {value && !uploading && (
+          <div className="mt-2 flex items-center gap-2">
+            <img src={value} alt="Uploaded preview" className="h-16 w-16 object-cover rounded-md border border-sand-200" />
+            <span className="text-xs text-brand-600">Uploaded</span>
+          </div>
+        )}
+      </div>
+    )
+  }
   if (field.field_type === 'textarea') {
     return (
       <div>

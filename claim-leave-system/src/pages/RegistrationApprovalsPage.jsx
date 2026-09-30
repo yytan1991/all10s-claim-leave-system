@@ -32,11 +32,11 @@ export default function RegistrationApprovalsPage() {
     setLoading(true)
     const { data: fieldData } = await supabase
       .from('registration_form_fields')
-      .select('id, label')
+      .select('id, label, field_type')
       .eq('org_id', profile.org_id)
     const labelMap = {}
     ;(fieldData || []).forEach((f) => {
-      labelMap[f.id] = f.label
+      labelMap[f.id] = { label: f.label, fieldType: f.field_type }
     })
     setFieldLabels(labelMap)
 
@@ -198,11 +198,25 @@ export default function RegistrationApprovalsPage() {
                   {r.custom_answers &&
                     Object.entries(r.custom_answers)
                       .filter(([, v]) => v)
-                      .map(([fieldId, v]) => (
-                        <p key={fieldId} className="text-xs text-ink-600 mt-1">
-                          <span className="text-ink-500">{fieldLabels[fieldId] || 'Question'}:</span> {v}
-                        </p>
-                      ))}
+                      .map(([fieldId, v]) => {
+                        const fieldInfo = fieldLabels[fieldId]
+                        const questionLabel = fieldInfo?.label || 'Question'
+                        if (fieldInfo?.fieldType === 'image') {
+                          return (
+                            <div key={fieldId} className="mt-2">
+                              <p className="text-xs text-ink-500 mb-1">{questionLabel}:</p>
+                              <a href={v} target="_blank" rel="noopener noreferrer">
+                                <img src={v} alt={questionLabel} className="h-20 w-20 object-cover rounded-md border border-sand-200" />
+                              </a>
+                            </div>
+                          )
+                        }
+                        return (
+                          <p key={fieldId} className="text-xs text-ink-600 mt-1">
+                            <span className="text-ink-500">{questionLabel}:</span> {v}
+                          </p>
+                        )
+                      })}
                 </div>
               </div>
               <p className="text-xs text-ink-400 mb-3">Submitted {formatDate(r.created_at?.slice(0, 10))}</p>

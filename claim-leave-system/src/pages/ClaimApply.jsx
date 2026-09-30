@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 
 export default function ClaimApply() {
   const { profile } = useAuth()
@@ -105,13 +106,7 @@ export default function ClaimApply() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Expense date</label>
-              <input
-                type="date"
-                className="field-input"
-                value={claimDate}
-                onChange={(e) => setClaimDate(e.target.value)}
-                required
-              />
+              <DatePicker value={claimDate} onChange={setClaimDate} />
             </div>
             <div>
               <label className="field-label">Amount (RM)</label>

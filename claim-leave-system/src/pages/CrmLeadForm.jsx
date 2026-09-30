@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 
 const LEAD_SOURCES = [
   'Referral',
@@ -273,21 +274,11 @@ export default function CrmLeadForm() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">First contact date</label>
-              <input
-                type="date"
-                className="field-input"
-                value={form.first_contact_date}
-                onChange={(e) => update('first_contact_date', e.target.value)}
-              />
+              <DatePicker value={form.first_contact_date} onChange={(v) => update('first_contact_date', v)} />
             </div>
             <div>
               <label className="field-label">Next follow-up date</label>
-              <input
-                type="date"
-                className="field-input"
-                value={form.next_followup_date}
-                onChange={(e) => update('next_followup_date', e.target.value)}
-              />
+              <DatePicker value={form.next_followup_date} onChange={(v) => update('next_followup_date', v)} />
             </div>
           </div>
 

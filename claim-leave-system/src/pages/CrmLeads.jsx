@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import { stagePillClass, isOverdue } from '../lib/helpers'
 
 export default function CrmLeads() {
@@ -276,16 +277,14 @@ export default function CrmLeads() {
                         c.profiles?.full_name || '—'
                       )}
                     </td>
-                    <td className={`px-5 py-3 font-medium ${overdue ? 'text-rose-600' : 'text-ink-700'}`}>
-                      <input
-                        type="date"
-                        value={c.next_followup_date || ''}
-                        onChange={(e) => updateField(c.id, 'next_followup_date', e.target.value || null)}
-                        className={`bg-transparent border-0 p-0 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 rounded ${
-                          overdue ? 'text-rose-600' : 'text-ink-700'
-                        }`}
-                      />
-                      {overdue && <span className="ml-1.5 text-xs">(overdue)</span>}
+                    <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="w-40">
+                        <DatePicker
+                          value={c.next_followup_date || ''}
+                          onChange={(v) => updateField(c.id, 'next_followup_date', v || null)}
+                        />
+                      </div>
+                      {overdue && <span className="ml-1.5 text-xs text-rose-600">(overdue)</span>}
                     </td>
                   </tr>
                 )

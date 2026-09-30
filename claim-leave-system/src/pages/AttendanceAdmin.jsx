@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import {
   formatDate,
   formatDateWithDay,
@@ -237,12 +238,9 @@ export default function AttendanceAdmin() {
 
         <div className="flex items-center gap-3">
           {tab === 'daily' ? (
-            <input
-              type="date"
-              className="field-input w-auto"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <div className="w-44">
+              <DatePicker value={date} onChange={setDate} />
+            </div>
           ) : (
             <input
               type="month"
@@ -458,13 +456,7 @@ function ManualEntryModal({ profile, record, date, profiles, locations, onClose,
 
           <div>
             <label className="field-label">Date</label>
-            <input
-              type="date"
-              className="field-input"
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              disabled={Boolean(record)}
-            />
+            <DatePicker value={entryDate} onChange={setEntryDate} disabled={Boolean(record)} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

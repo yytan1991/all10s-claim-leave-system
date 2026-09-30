@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert } from '../components/UI'
+import DatePicker from '../components/DatePicker'
 import { countWorkingDays } from '../lib/helpers'
 
 export default function LeaveApply() {
@@ -118,23 +119,11 @@ export default function LeaveApply() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Start date</label>
-              <input
-                type="date"
-                className="field-input"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-              />
+              <DatePicker value={startDate} onChange={setStartDate} />
             </div>
             <div>
               <label className="field-label">End date</label>
-              <input
-                type="date"
-                className="field-input"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                required
-              />
+              <DatePicker value={endDate} onChange={setEndDate} />
             </div>
           </div>
 

@@ -15,9 +15,11 @@ import {
   Users2,
   KanbanSquare,
   Receipt,
-    Wallet,
+  Wallet,
   Megaphone,
   School,
+  UserCog,
+  CalendarClock,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -51,10 +53,23 @@ const managerLinks = [
 
 const adminLinks = [
   { to: '/employees', label: 'Employees', icon: Users },
-  { to: '/classes', label: 'Classes', icon: School },
-  { to: '/payslips-admin', label: 'Payslips', icon: Receipt },
-  { to: '/cashflow', label: 'Cash Flow', icon: Wallet },
   { to: '/settings', label: 'Settings', icon: Settings },
+]
+
+const financeLinks = [
+  { to: '/finance-dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/cashflow', label: 'Cash Flow', icon: Wallet },
+  { to: '/payslips-admin', label: 'Payslips', icon: Receipt },
+]
+
+const studentMgmtLinks = [
+  { to: '/student-dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/classes', label: 'Classes', icon: School },
+  { to: '/students', label: 'Students', icon: Users2 },
+  { to: '/teachers', label: 'Teachers', icon: UserCog },
+  { to: '/invoices', label: 'Invoice', icon: Receipt },
+  { to: '/recurring-invoice', label: 'Recurring Invoice', icon: CalendarClock },
+  { to: '/invoice-settings', label: 'Invoice Setting', icon: Settings },
 ]
 
 export default function Sidebar({ className = '' }) {
@@ -109,6 +124,38 @@ export default function Sidebar({ className = '' }) {
           <>
             <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Manager</p>
             {managerLinks.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link')}
+              >
+                <Icon size={17} strokeWidth={2} />
+                {label}
+              </NavLink>
+            ))}
+          </>
+        )}
+
+        {isAdmin && (
+          <>
+            <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Student Management</p>
+            {studentMgmtLinks.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link')}
+              >
+                <Icon size={17} strokeWidth={2} />
+                {label}
+              </NavLink>
+            ))}
+          </>
+        )}
+
+        {isAdmin && (
+          <>
+            <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Finance</p>
+            {financeLinks.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}

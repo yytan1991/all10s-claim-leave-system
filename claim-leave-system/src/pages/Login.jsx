@@ -66,10 +66,10 @@ export default function Login() {
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 text-white bg-chrome">
         <div>
           <p className="font-display text-2xl font-semibold">WiiTeam</p>
-                    <p className="text-white/70 text-sm mt-1">One System, All Connected</p>
+          <p className="text-white/70 text-sm mt-1">One System, All Connected</p>
         </div>
         <div className="max-w-md">
-                              <h2 className="font-body text-3xl font-medium leading-snug text-white">
+          <h2 className="font-body text-3xl font-medium leading-snug text-white">
             Perfect All-in-One system for SMEs
           </h2>
         </div>
@@ -80,7 +80,7 @@ export default function Login() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <p className="font-display text-xl font-semibold text-red-800">WiiTeam</p>
-                        <p className="text-red-900/60 text-sm">One System, All Connected</p>
+            <p className="text-red-900/60 text-sm">One System, All Connected</p>
           </div>
 
           {!showForgot ? (

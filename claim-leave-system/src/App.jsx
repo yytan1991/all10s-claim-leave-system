@@ -13,6 +13,8 @@ import Attendance from './pages/Attendance'
 import AttendanceAdmin from './pages/AttendanceAdmin'
 import TeamCalendar from './pages/TeamCalendar'
 import CrmDashboard from './pages/CrmDashboard'
+import StudentDashboard from './pages/StudentDashboard'
+import FinanceDashboard from './pages/FinanceDashboard'
 import CrmPipelineBoard from './pages/CrmPipelineBoard'
 import CrmLeads from './pages/CrmLeads'
 import CrmLeadForm from './pages/CrmLeadForm'
@@ -23,7 +25,12 @@ import MyPayslips from './pages/MyPayslips'
 import PayslipsAdmin from './pages/PayslipsAdmin'
 import CashFlow from './pages/CashFlow'
 import Announcements from './pages/Announcements'
-import ClassesAdmin from './pages/ClassesAdmin'
+import ClassesPage from './pages/ClassesPage'
+import StudentsPage from './pages/StudentsPage'
+import TeachersPage from './pages/TeachersPage'
+import InvoicesPage from './pages/InvoicesPage'
+import InvoiceSettingsPage from './pages/InvoiceSettingsPage'
+import RecurringInvoicePage from './pages/RecurringInvoicePage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
@@ -184,7 +191,7 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-            <Route
+      <Route
         path="/announcements"
         element={
           <ProtectedRoute>
@@ -193,10 +200,66 @@ export default function App() {
         }
       />
       <Route
+        path="/student-dashboard"
+        element={
+          <ProtectedRoute requireAdmin>
+            <StudentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance-dashboard"
+        element={
+          <ProtectedRoute requireAdmin>
+            <FinanceDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/classes"
         element={
           <ProtectedRoute requireAdmin>
-            <ClassesAdmin />
+            <ClassesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/students"
+        element={
+          <ProtectedRoute requireAdmin>
+            <StudentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teachers"
+        element={
+          <ProtectedRoute requireAdmin>
+            <TeachersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices"
+        element={
+          <ProtectedRoute requireAdmin>
+            <InvoicesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoice-settings"
+        element={
+          <ProtectedRoute requireAdmin>
+            <InvoiceSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recurring-invoice"
+        element={
+          <ProtectedRoute requireAdmin>
+            <RecurringInvoicePage />
           </ProtectedRoute>
         }
       />

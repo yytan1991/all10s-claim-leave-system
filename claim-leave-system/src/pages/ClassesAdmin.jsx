@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, X, Users2, School, CalendarClock, UserCog, Pencil } from 'lucide-react'
+import { Plus, Trash2, X, Users2, School, CalendarClock, UserCog, Pencil, Receipt } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
@@ -24,6 +24,7 @@ export default function ClassesAdmin() {
         {[
           { key: 'classes', label: 'Classes' },
           { key: 'students', label: 'Students' },
+          { key: 'invoices', label: 'Invoices' },
           { key: 'byteacher', label: 'By Teacher' },
         ].map((t) => (
           <button
@@ -42,6 +43,7 @@ export default function ClassesAdmin() {
 
       {tab === 'classes' && <ClassesTab />}
       {tab === 'students' && <StudentsTab />}
+      {tab === 'invoices' && <InvoicesTab />}
       {tab === 'byteacher' && <ByTeacherTab />}
     </AppLayout>
   )
@@ -53,13 +55,26 @@ export default function ClassesAdmin() {
 function StudentsTab() {
   const { profile } = useAuth()
   const [rows, setRows] = useState([])
+  const [classFeeTotals, setClassFeeTotals] = useState({})
   const [adding, setAdding] = useState(false)
+  const [editingBilling, setEditingBilling] = useState(null)
   const [loading, setLoading] = useState(true)
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('students').select('*').eq('org_id', profile.org_id).order('full_name')
-    setRows(data || [])
+    const [{ data: studentData }, { data: enrollData }] = await Promise.all([
+      supabase.from('students').select('*').eq('org_id', profile.org_id).order('full_name'),
+      supabase
+        .from('class_enrollments')
+        .select('student_id, classes(fee_amount)')
+        .eq('org_id', profile.org_id),
+    ])
+    setRows(studentData || [])
+    const totals = {}
+    ;(enrollData || []).forEach((e) => {
+      totals[e.student_id] = (totals[e.student_id] || 0) + Number(e.classes?.fee_amount || 0)
+    })
+    setClassFeeTotals(totals)
     setLoading(false)
   }
 
@@ -74,8 +89,14 @@ function StudentsTab() {
     load()
   }
 
+  function expectedFee(student) {
+    return student.billing_mode === 'fixed'
+      ? Number(student.fixed_fee_amount || 0)
+      : classFeeTotals[student.id] || 0
+  }
+
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div className="flex justify-end">
         <button onClick={() => setAdding(true)} className="btn-primary text-sm">
           <Plus size={15} /> Add student
@@ -94,6 +115,7 @@ function StudentsTab() {
                 <th className="px-5 py-3 font-medium">Student</th>
                 <th className="px-5 py-3 font-medium">Parent</th>
                 <th className="px-5 py-3 font-medium">Contact</th>
+                <th className="px-5 py-3 font-medium">Billing</th>
                 <th className="px-5 py-3 font-medium" />
               </tr>
             </thead>
@@ -103,7 +125,20 @@ function StudentsTab() {
                   <td className="px-5 py-3 font-medium text-ink-900">{r.full_name}</td>
                   <td className="px-5 py-3 text-ink-700">{r.parent_name || '—'}</td>
                   <td className="px-5 py-3 text-ink-700">{r.parent_contact || '—'}</td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-5 py-3 text-ink-700">
+                    RM {expectedFee(r).toFixed(2)}
+                    <span className="text-ink-500 text-xs">
+                      {' '}
+                      ({r.billing_mode === 'fixed' ? 'fixed' : 'per class'})
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right space-x-3 whitespace-nowrap">
+                    <button
+                      onClick={() => setEditingBilling(r)}
+                      className="text-brand-600 hover:underline text-xs font-medium"
+                    >
+                      Billing
+                    </button>
                     <button onClick={() => removeStudent(r.id)} className="text-rose-500 hover:text-rose-600">
                       <Trash2 size={15} />
                     </button>
@@ -122,6 +157,17 @@ function StudentsTab() {
           onClose={() => setAdding(false)}
           onSaved={() => {
             setAdding(false)
+            load()
+          }}
+        />
+      )}
+
+      {editingBilling && (
+        <BillingModal
+          student={editingBilling}
+          onClose={() => setEditingBilling(null)}
+          onSaved={() => {
+            setEditingBilling(null)
             load()
           }}
         />
@@ -206,6 +252,117 @@ function AddStudentModal({ orgId, createdBy, onClose, onSaved }) {
   )
 }
 
+const RECURRENCE_OPTIONS = [
+  { value: '1', label: 'Monthly' },
+  { value: '3', label: 'Every 3 months' },
+  { value: '6', label: 'Every 6 months' },
+  { value: '12', label: 'Every 12 months' },
+]
+
+function BillingModal({ student, onClose, onSaved }) {
+  const [billingMode, setBillingMode] = useState(student.billing_mode || 'fixed')
+  const [fixedFeeAmount, setFixedFeeAmount] = useState(student.fixed_fee_amount || 0)
+  const [defaultRecurrence, setDefaultRecurrence] = useState(String(student.default_recurrence_months || 1))
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setError('')
+    setSaving(true)
+    const { error: updateError } = await supabase
+      .from('students')
+      .update({
+        billing_mode: billingMode,
+        fixed_fee_amount: Number(fixedFeeAmount) || 0,
+        default_recurrence_months: Number(defaultRecurrence),
+      })
+      .eq('id', student.id)
+    setSaving(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="card w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">Billing · {student.full_name}</h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSave} className="space-y-4">
+          {error && <Alert tone="rose">{error}</Alert>}
+          <div>
+            <label className="field-label mb-2 block">Fee is</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setBillingMode('fixed')}
+                className={billingMode === 'fixed' ? 'btn-primary flex-1 text-sm' : 'btn-secondary flex-1 text-sm'}
+              >
+                Fixed amount
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingMode('per_class')}
+                className={billingMode === 'per_class' ? 'btn-primary flex-1 text-sm' : 'btn-secondary flex-1 text-sm'}
+              >
+                Sum of classes
+              </button>
+            </div>
+          </div>
+          {billingMode === 'fixed' && (
+            <div>
+              <label className="field-label">Fixed fee (RM per period)</label>
+              <input
+                type="number"
+                step="0.01"
+                className="field-input"
+                value={fixedFeeAmount}
+                onChange={(e) => setFixedFeeAmount(e.target.value)}
+              />
+            </div>
+          )}
+          {billingMode === 'per_class' && (
+            <p className="text-xs text-ink-500">
+              Fee is calculated automatically from the fee set on each class this student is
+              enrolled in.
+            </p>
+          )}
+          <div>
+            <label className="field-label">Default billing period</label>
+            <select
+              className="field-input"
+              value={defaultRecurrence}
+              onChange={(e) => setDefaultRecurrence(e.target.value)}
+            >
+              {RECURRENCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-ink-500 mt-1">Used as the default when generating invoices for this student.</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Saving…' : 'Save billing'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // =========================================================
 // Classes
 // =========================================================
@@ -228,7 +385,10 @@ function ClassesTab() {
         .order('day_of_week')
         .order('start_time'),
       supabase.from('class_enrollments').select('class_id').eq('org_id', profile.org_id),
-      supabase.from('class_teachers').select('class_id, profiles(full_name)').eq('org_id', profile.org_id),
+      supabase
+        .from('class_teachers')
+        .select('class_id, profiles!class_teachers_teacher_id_fkey(full_name)')
+        .eq('org_id', profile.org_id),
     ])
     setClasses(classData || [])
 
@@ -350,6 +510,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
   const [startTime, setStartTime] = useState('15:00')
   const [endTime, setEndTime] = useState('16:00')
   const [room, setRoom] = useState('')
+  const [feeAmount, setFeeAmount] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -372,6 +533,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
       start_time: startTime,
       end_time: endTime,
       room: room || null,
+      fee_amount: feeAmount === '' ? null : Number(feeAmount),
       created_by: createdBy,
     })
     setSaving(false)
@@ -428,9 +590,22 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
               <input type="time" className="field-input" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
-          <div>
-            <label className="field-label">Room (optional)</label>
-            <input className="field-input" value={room} onChange={(e) => setRoom(e.target.value)} placeholder="e.g. Room 2" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">Room (optional)</label>
+              <input className="field-input" value={room} onChange={(e) => setRoom(e.target.value)} placeholder="e.g. Room 2" />
+            </div>
+            <div>
+              <label className="field-label">Fee (RM, optional)</label>
+              <input
+                type="number"
+                step="0.01"
+                className="field-input"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                placeholder="e.g. 150"
+              />
+            </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">
@@ -455,6 +630,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
   const [startTime, setStartTime] = useState(classItem.start_time?.slice(0, 5) || '')
   const [endTime, setEndTime] = useState(classItem.end_time?.slice(0, 5) || '')
   const [room, setRoom] = useState(classItem.room || '')
+  const [feeAmount, setFeeAmount] = useState(classItem.fee_amount ?? '')
   const [savingDetails, setSavingDetails] = useState(false)
   const [detailsError, setDetailsError] = useState('')
   const [detailsSaved, setDetailsSaved] = useState(false)
@@ -480,6 +656,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
         start_time: startTime,
         end_time: endTime,
         room: room || null,
+        fee_amount: feeAmount === '' ? null : Number(feeAmount),
       })
       .eq('id', classItem.id)
     setSavingDetails(false)
@@ -495,6 +672,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
     classItem.start_time = startTime
     classItem.end_time = endTime
     classItem.room = room || null
+    classItem.fee_amount = feeAmount === '' ? null : Number(feeAmount)
   }
 
   return (
@@ -539,9 +717,22 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
               <input type="time" className="field-input" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
-          <div>
-            <label className="field-label">Room (optional)</label>
-            <input className="field-input" value={room} onChange={(e) => setRoom(e.target.value)} placeholder="e.g. Room 2" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">Room (optional)</label>
+              <input className="field-input" value={room} onChange={(e) => setRoom(e.target.value)} placeholder="e.g. Room 2" />
+            </div>
+            <div>
+              <label className="field-label">Fee (RM, optional)</label>
+              <input
+                type="number"
+                step="0.01"
+                className="field-input"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                placeholder="e.g. 150"
+              />
+            </div>
           </div>
           <button type="submit" disabled={savingDetails} className="btn-primary">
             {savingDetails ? 'Saving…' : 'Save class details'}
@@ -594,6 +785,7 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -677,17 +869,33 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
           description={isTeacherMode ? undefined : 'Add students in the Students tab first.'}
         />
       ) : (
-        <div className="space-y-1 max-h-64 overflow-y-auto border border-sand-200 rounded-md p-2">
-          {allMembers.map((m) => (
-            <label
-              key={m.id}
-              className="flex items-center gap-3 px-2 py-2 rounded hover:bg-sand-50 cursor-pointer text-sm"
-            >
-              <input type="checkbox" checked={checked.has(m.id)} onChange={() => toggle(m.id)} />
-              {m.full_name}
-            </label>
-          ))}
-        </div>
+        <>
+          <input
+            type="text"
+            className="field-input mb-2"
+            placeholder={`Search ${isTeacherMode ? 'staff' : 'students'}…`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {checked.size > 0 && (
+            <p className="text-xs text-ink-500 mb-2">{checked.size} selected</p>
+          )}
+          <div className="space-y-1 max-h-64 overflow-y-auto border border-sand-200 rounded-md p-2">
+            {allMembers
+              .filter((m) => m.full_name?.toLowerCase().includes(search.trim().toLowerCase()))
+              .map((m) => (
+                <label
+                  key={m.id}
+                  className="flex items-center gap-3 px-2 py-2 rounded hover:bg-sand-50 cursor-pointer text-sm"
+                >
+                  <input type="checkbox" checked={checked.has(m.id)} onChange={() => toggle(m.id)} />
+                  {m.full_name}
+                </label>
+              ))}
+            {allMembers.filter((m) => m.full_name?.toLowerCase().includes(search.trim().toLowerCase())).length ===
+              0 && <p className="text-sm text-ink-500 px-2 py-3">No matches for "{search}".</p>}
+          </div>
+        </>
       )}
 
       <div className="flex gap-3 pt-5">
@@ -697,6 +905,444 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
         <button onClick={onClose} className="btn-secondary">
           Close
         </button>
+      </div>
+    </div>
+  )
+}
+
+// =========================================================
+// Invoices — per-student, with bulk create and bulk recurring-period switch
+// =========================================================
+function InvoicesTab() {
+  const { profile } = useAuth()
+  const [students, setStudents] = useState([])
+  const [classFeeTotals, setClassFeeTotals] = useState({})
+  const [invoices, setInvoices] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [bulkRecurrence, setBulkRecurrence] = useState(false)
+  const [monthFilter, setMonthFilter] = useState('') // '' = all
+
+  async function load() {
+    setLoading(true)
+    const [{ data: studentData }, { data: enrollData }, { data: invoiceData }] = await Promise.all([
+      supabase.from('students').select('*').eq('org_id', profile.org_id).order('full_name'),
+      supabase.from('class_enrollments').select('student_id, classes(fee_amount)').eq('org_id', profile.org_id),
+      supabase
+        .from('student_invoices')
+        .select('*, students(full_name)')
+        .eq('org_id', profile.org_id)
+        .order('due_date', { ascending: false }),
+    ])
+    setStudents(studentData || [])
+    const totals = {}
+    ;(enrollData || []).forEach((e) => {
+      totals[e.student_id] = (totals[e.student_id] || 0) + Number(e.classes?.fee_amount || 0)
+    })
+    setClassFeeTotals(totals)
+    setInvoices(invoiceData || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (profile) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.org_id])
+
+  async function markStatus(inv, status) {
+    await supabase
+      .from('student_invoices')
+      .update({ status, payment_date: status === 'paid' ? new Date().toISOString().slice(0, 10) : null })
+      .eq('id', inv.id)
+    load()
+  }
+
+  async function deleteInvoice(id) {
+    if (!confirm('Delete this invoice?')) return
+    await supabase.from('student_invoices').delete().eq('id', id)
+    load()
+  }
+
+  const visibleInvoices = monthFilter ? invoices.filter((i) => i.due_date.slice(0, 7) === monthFilter) : invoices
+
+  const months = [...new Set(invoices.map((i) => i.due_date.slice(0, 7)))].sort().reverse()
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <select className="field-input w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+          <option value="">All months</option>
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <div className="flex gap-2">
+          <button onClick={() => setBulkRecurrence(true)} className="btn-secondary text-sm">
+            Bulk switch billing period
+          </button>
+          <button onClick={() => setCreating(true)} className="btn-primary text-sm" disabled={students.length === 0}>
+            <Plus size={15} /> Create invoices
+          </button>
+        </div>
+      </div>
+      {students.length === 0 && (
+        <Alert tone="amber">Add students first (Students tab) before creating invoices.</Alert>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-ink-500">Loading…</p>
+      ) : visibleInvoices.length === 0 ? (
+        <EmptyState icon={Receipt} title="No invoices yet" description="Create your first batch above." />
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-sand-100 text-ink-500 text-left">
+                <tr>
+                  <th className="px-5 py-3 font-medium">Student</th>
+                  <th className="px-5 py-3 font-medium">Description</th>
+                  <th className="px-5 py-3 font-medium">Due date</th>
+                  <th className="px-5 py-3 font-medium">Amount</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sand-100">
+                {visibleInvoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td className="px-5 py-3 font-medium text-ink-900">{inv.students?.full_name}</td>
+                    <td className="px-5 py-3 text-ink-700">{inv.description || '—'}</td>
+                    <td className="px-5 py-3 text-ink-700">{inv.due_date}</td>
+                    <td className="px-5 py-3 text-ink-700">RM {Number(inv.amount).toFixed(2)}</td>
+                    <td className="px-5 py-3">
+                      {inv.status === 'paid' ? (
+                        <span className="badge-approved">Paid</span>
+                      ) : inv.status === 'cancelled' ? (
+                        <span className="badge-cancelled">Cancelled</span>
+                      ) : (
+                        <span className="badge-pending">Unpaid</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right space-x-3 whitespace-nowrap">
+                      {inv.status === 'unpaid' && (
+                        <button
+                          onClick={() => markStatus(inv, 'paid')}
+                          className="text-brand-600 hover:underline text-xs font-medium"
+                        >
+                          Mark paid
+                        </button>
+                      )}
+                      <button onClick={() => deleteInvoice(inv.id)} className="text-rose-500 hover:text-rose-600">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {creating && (
+        <CreateInvoicesModal
+          orgId={profile.org_id}
+          createdBy={profile.id}
+          students={students}
+          classFeeTotals={classFeeTotals}
+          onClose={() => setCreating(false)}
+          onSaved={() => {
+            setCreating(false)
+            load()
+          }}
+        />
+      )}
+
+      {bulkRecurrence && (
+        <BulkRecurrenceModal
+          students={students}
+          onClose={() => setBulkRecurrence(false)}
+          onSaved={() => {
+            setBulkRecurrence(false)
+            load()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function CreateInvoicesModal({ orgId, createdBy, students, classFeeTotals, onClose, onSaved }) {
+  const [selected, setSelected] = useState(new Set())
+  const [search, setSearch] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10))
+  const [useOwnRecurrence, setUseOwnRecurrence] = useState(true)
+  const [recurrence, setRecurrence] = useState('1')
+  const [occurrences, setOccurrences] = useState(1)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function expectedFee(student) {
+    return student.billing_mode === 'fixed'
+      ? Number(student.fixed_fee_amount || 0)
+      : classFeeTotals[student.id] || 0
+  }
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    setError('')
+    if (selected.size === 0) {
+      setError('Select at least one student.')
+      return
+    }
+    setSaving(true)
+
+    const rows = []
+    for (const studentId of selected) {
+      const student = students.find((s) => s.id === studentId)
+      const amount = expectedFee(student)
+      const interval = useOwnRecurrence ? student.default_recurrence_months : Number(recurrence)
+      const count = Math.max(Number(occurrences) || 1, 1)
+      const groupId = count > 1 ? crypto.randomUUID() : null
+
+      for (let i = 0; i < count; i++) {
+        const d = new Date(dueDate)
+        d.setMonth(d.getMonth() + interval * i)
+        rows.push({
+          org_id: orgId,
+          student_id: studentId,
+          description: description || null,
+          amount,
+          due_date: d.toISOString().slice(0, 10),
+          recurrence_interval_months: count > 1 ? interval : null,
+          recurrence_group_id: groupId,
+          created_by: createdBy,
+        })
+      }
+    }
+
+    const { error: insertError } = await supabase.from('student_invoices').insert(rows)
+    setSaving(false)
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+    onSaved()
+  }
+
+  const filteredStudents = students.filter((s) => s.full_name.toLowerCase().includes(search.trim().toLowerCase()))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+      <div className="card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">Create invoices</h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleCreate} className="space-y-4">
+          {error && <Alert tone="rose">{error}</Alert>}
+
+          <div>
+            <label className="field-label mb-2 block">Students ({selected.size} selected)</label>
+            <input
+              type="text"
+              className="field-input mb-2"
+              placeholder="Search students…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="space-y-1 max-h-48 overflow-y-auto border border-sand-200 rounded-md p-2">
+              {filteredStudents.map((s) => (
+                <label
+                  key={s.id}
+                  className="flex items-center justify-between gap-2 px-2 py-2 rounded hover:bg-sand-50 cursor-pointer text-sm"
+                >
+                  <span className="flex items-center gap-2">
+                    <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
+                    {s.full_name}
+                  </span>
+                  <span className="text-xs text-ink-500">RM {expectedFee(s).toFixed(2)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="field-label">Description (optional)</label>
+            <input
+              className="field-input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. March tuition fee"
+            />
+          </div>
+
+          <div>
+            <label className="field-label">First due date</label>
+            <input type="date" className="field-input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              checked={useOwnRecurrence}
+              onChange={(e) => setUseOwnRecurrence(e.target.checked)}
+            />
+            Use each student's own default billing period
+          </label>
+
+          {!useOwnRecurrence && (
+            <div>
+              <label className="field-label">Billing period (applies to all selected)</label>
+              <select className="field-input" value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+                {RECURRENCE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="field-label">Number of occurrences</label>
+            <input
+              type="number"
+              min="1"
+              max="24"
+              className="field-input w-32"
+              value={occurrences}
+              onChange={(e) => setOccurrences(e.target.value)}
+            />
+            <p className="text-xs text-ink-500 mt-1">
+              1 = a single invoice. More creates that many future periods per selected student.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Creating…' : 'Create invoices'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Bulk-change several students' default billing period at once (affects
+// future invoice generation only — already-created invoices are untouched).
+function BulkRecurrenceModal({ students, onClose, onSaved }) {
+  const [selected, setSelected] = useState(new Set())
+  const [search, setSearch] = useState('')
+  const [recurrence, setRecurrence] = useState('1')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    setError('')
+    if (selected.size === 0) {
+      setError('Select at least one student.')
+      return
+    }
+    setSaving(true)
+    const { error: updateError } = await supabase
+      .from('students')
+      .update({ default_recurrence_months: Number(recurrence) })
+      .in('id', [...selected])
+    setSaving(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    onSaved()
+  }
+
+  const filteredStudents = students.filter((s) => s.full_name.toLowerCase().includes(search.trim().toLowerCase()))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+      <div className="card w-full max-w-md p-6 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-ink-900">Bulk switch billing period</h3>
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-xs text-ink-500 mb-4">
+          Changes these students' default billing period for future invoices you create — doesn't
+          touch invoices that already exist.
+        </p>
+
+        {error && (
+          <div className="mb-3">
+            <Alert tone="rose">{error}</Alert>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <label className="field-label">New billing period</label>
+          <select className="field-input" value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+            {RECURRENCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <label className="field-label mb-2 block">Students ({selected.size} selected)</label>
+        <input
+          type="text"
+          className="field-input mb-2"
+          placeholder="Search students…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="space-y-1 max-h-56 overflow-y-auto border border-sand-200 rounded-md p-2 mb-5">
+          {filteredStudents.map((s) => (
+            <label key={s.id} className="flex items-center gap-2 px-2 py-2 rounded hover:bg-sand-50 cursor-pointer text-sm">
+              <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
+              {s.full_name}
+            </label>
+          ))}
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={handleSave} disabled={saving} className="btn-primary">
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+          <button onClick={onClose} className="btn-secondary">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   )

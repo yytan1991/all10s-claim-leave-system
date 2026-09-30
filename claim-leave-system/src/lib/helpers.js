@@ -160,3 +160,20 @@ export function getMonthGrid(year, monthIndex) {
   }
   return weeks
 }
+
+export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+export function formatTimeLabel(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h % 12 === 0 ? 12 : h % 12
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+export const RECURRENCE_OPTIONS = [
+  { value: '1', label: 'Monthly' },
+  { value: '3', label: 'Every 3 months' },
+  { value: '6', label: 'Every 6 months' },
+  { value: '12', label: 'Every 12 months' },
+]

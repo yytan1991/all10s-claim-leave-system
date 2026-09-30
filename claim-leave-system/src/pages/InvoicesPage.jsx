@@ -21,10 +21,58 @@ function computePeriodLabel(dateStr, intervalMonths) {
   return `${startLabel} - ${endLabel}`
 }
 
-function SortHeader({ label, field, sortField, sortDir, onSort }) {
+// Month-picker helpers: "YYYY-MM" <-> "Month YYYY" label, used to let admins
+// pick the billing period from a real calendar control instead of typing.
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+function dateToMonthInput(dateStr) {
+  return dateStr ? dateStr.slice(0, 7) : ''
+}
+
+function monthInputToLabel(monthStr) {
+  if (!monthStr) return ''
+  const [y, m] = monthStr.split('-').map(Number)
+  return `${MONTH_NAMES[m - 1]} ${y}`
+}
+
+function addMonthsToMonthInput(monthStr, months) {
+  const [y, m] = monthStr.split('-').map(Number)
+  const d = new Date(y, m - 1 + months, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function periodLabelFromRange(fromMonth, toMonth) {
+  if (!fromMonth) return ''
+  if (!toMonth || toMonth === fromMonth) return monthInputToLabel(fromMonth)
+  return `${monthInputToLabel(fromMonth)} - ${monthInputToLabel(toMonth)}`
+}
+
+// Parses a previously-saved label like "October 2026" or
+// "October 2026 - April 2027" back into month-picker values, so editing an
+// existing invoice starts from what was actually saved, not a guess.
+function parsePeriodLabel(label) {
+  if (!label) return null
+  const parseOne = (s) => {
+    const m = s.trim().match(/^([A-Za-z]+)\s+(\d{4})$/)
+    if (!m) return null
+    const idx = MONTH_NAMES.findIndex((name) => name.toLowerCase() === m[1].toLowerCase())
+    if (idx === -1) return null
+    return `${m[2]}-${String(idx + 1).padStart(2, '0')}`
+  }
+  const parts = label.split(' - ')
+  const from = parseOne(parts[0])
+  if (!from) return null
+  const to = parts[1] ? parseOne(parts[1]) : from
+  return { from, to: to || from }
+}
+
+function SortHeader({ label, field, sortField, sortDir, onSort, widthClass = '' }) {
   const active = sortField === field
   return (
-    <th className="px-2.5 py-2 font-medium">
+    <th className={`px-2 py-2 font-medium ${widthClass}`}>
       <button onClick={() => onSort(field)} className="inline-flex items-center gap-1 hover:text-ink-900">
         {label}
         {active ? sortDir === 'desc' ? <ArrowDown size={11} /> : <ArrowUp size={11} /> : null}
@@ -387,71 +435,63 @@ export default function InvoicesPage() {
         <EmptyState icon={Pencil} title="No invoices found" description="Try clearing filters, or create your first batch above." />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-sand-100 text-ink-500 text-left">
-                <tr>
-                  <th className="px-2.5 py-2">
-                    <input type="checkbox" checked={selected.size === visible.length} onChange={toggleSelectAll} />
-                  </th>
-                  <SortHeader label="No." field="invoice_no" sortField={sortField} sortDir={sortDir} onSort={onSort} />
-                  <th className="px-2.5 py-2 font-medium whitespace-nowrap">Student</th>
-                  <th className="px-2.5 py-2 font-medium min-w-[220px] max-w-[360px]">Description</th>
-                  <th className="px-2.5 py-2 font-medium whitespace-nowrap">Total</th>
-                  <th className="px-2.5 py-2 font-medium whitespace-nowrap">Payable</th>
-                  <SortHeader label="Issued" field="issue_date" sortField={sortField} sortDir={sortDir} onSort={onSort} />
-                  <th className="px-2.5 py-2 font-medium whitespace-nowrap">Paid on</th>
-                  <th className="px-2.5 py-2 font-medium whitespace-nowrap">Method</th>
-                  <th className="px-2.5 py-2 font-medium whitespace-nowrap">Paid amt</th>
-                  <th className="px-2.5 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sand-100">
-                {visible.map((inv) => {
-                  const payable = Math.max(Number(inv.amount) - Number(inv.payment_amount || 0), 0)
-                  const st = statusLabel(inv)
-                  return (
-                    <tr key={inv.id}>
-                      <td className="px-2.5 py-2 align-top">
-                        <input type="checkbox" checked={selected.has(inv.id)} onChange={() => toggleSelect(inv.id)} />
-                      </td>
-                      <td className="px-2.5 py-2 align-top whitespace-nowrap">
-                        <button
-                          onClick={() => {
-                            setActiveInvoice(inv)
-                            setView('edit')
-                          }}
-                          className="font-semibold text-brand-600 hover:underline"
-                        >
-                          INV-{String(inv.invoice_no).padStart(5, '0')}
-                        </button>
-                      </td>
-                      <td className="px-2.5 py-2 align-top text-ink-900 whitespace-nowrap">{inv.students?.full_name}</td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-normal min-w-[220px] max-w-[360px]">
-                        {itemsDescription(inv)}
-                      </td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-nowrap">RM {Number(inv.amount).toFixed(2)}</td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-nowrap">
-                        RM {payable.toFixed(2)}
-                        <span className={`${st.cls} ml-1 text-[10px]`}>{st.text}</span>
-                      </td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-nowrap">{formatDate(inv.issue_date)}</td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-nowrap">
-                        {inv.payment_date ? formatDate(inv.payment_date) : '—'}
-                      </td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-nowrap">{inv.payment_method || '—'}</td>
-                      <td className="px-2.5 py-2 align-top text-ink-700 whitespace-nowrap">
-                        RM {Number(inv.payment_amount || 0).toFixed(2)}
-                      </td>
-                      <td className="px-2.5 py-2 align-top text-right whitespace-nowrap">
-                        <RowMenu
-                          onEdit={() => {
-                            setActiveInvoice(inv)
-                            setView('edit')
-                          }}
-                          onPay={() => setPayingInvoice(inv)}
-                          onDownload={() => handleDownloadInvoice(inv)}
-                          onDelete={() => deleteInvoice(inv.id)}
+          <table className="w-full text-xs table-fixed">
+            <thead className="bg-sand-100 text-ink-500 text-left">
+              <tr>
+                <th className="px-2 py-2 w-[4%]">
+                  <input type="checkbox" checked={selected.size === visible.length} onChange={toggleSelectAll} />
+                </th>
+                <SortHeader label="No." field="invoice_no" sortField={sortField} sortDir={sortDir} onSort={onSort} widthClass="w-[8%]" />
+                <th className="px-2 py-2 font-medium w-[13%]">Student</th>
+                <th className="px-2 py-2 font-medium w-[30%]">Description</th>
+                <th className="px-2 py-2 font-medium w-[13%]">Amount</th>
+                <SortHeader label="Issued" field="issue_date" sortField={sortField} sortDir={sortDir} onSort={onSort} widthClass="w-[9%]" />
+                <th className="px-2 py-2 font-medium w-[17%]">Payment</th>
+                <th className="px-2 py-2 font-medium w-[6%]" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sand-100">
+              {visible.map((inv) => {
+                const payable = Math.max(Number(inv.amount) - Number(inv.payment_amount || 0), 0)
+                const st = statusLabel(inv)
+                return (
+                  <tr key={inv.id}>
+                    <td className="px-2 py-2 align-top">
+                      <input type="checkbox" checked={selected.has(inv.id)} onChange={() => toggleSelect(inv.id)} />
+                    </td>
+                    <td className="px-2 py-2 align-top whitespace-normal break-words">
+                      <button
+                        onClick={() => {
+                          setActiveInvoice(inv)
+                          setView('edit')
+                        }}
+                        className="font-semibold text-brand-600 hover:underline"
+                      >
+                        INV-{String(inv.invoice_no).padStart(5, '0')}
+                      </button>
+                    </td>
+                    <td className="px-2 py-2 align-top text-ink-900 whitespace-normal break-words">{inv.students?.full_name}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal break-words">{itemsDescription(inv)}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">
+                      <div>RM {Number(inv.amount).toFixed(2)}</div>
+                      <div className="text-ink-500">
+                        RM {payable.toFixed(2)} <span className={`${st.cls} text-[10px]`}>{st.text}</span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">{formatDate(inv.issue_date)}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">
+                      <div>{inv.payment_method || '—'}: RM {Number(inv.payment_amount || 0).toFixed(2)}</div>
+                      {inv.payment_date && <div className="text-ink-500">{formatDate(inv.payment_date)}</div>}
+                    </td>
+                    <td className="px-2 py-2 align-top text-right">
+                      <RowMenu
+                        onEdit={() => {
+                          setActiveInvoice(inv)
+                          setView('edit')
+                        }}
+                        onPay={() => setPayingInvoice(inv)}
+                        onDownload={() => handleDownloadInvoice(inv)}
+                        onDelete={() => deleteInvoice(inv.id)}
                         />
                       </td>
                     </tr>
@@ -459,7 +499,6 @@ export default function InvoicesPage() {
                 })}
               </tbody>
             </table>
-          </div>
         </div>
       )}
 
@@ -1019,9 +1058,15 @@ function EditInvoicePage({ invoice, students, onBack, onSaved }) {
   const adjustmentTotal = items.reduce((s, it) => s + computeItemTotal(it).adjSigned, 0)
   const grandTotal = Math.max(subTotal + taxableAmount + adjustmentTotal, 0)
 
-  // Invoice month is derived automatically from the issue date + whatever
-  // billing frequency this invoice was generated with — never manually typed.
-  const invoiceMonth = computePeriodLabel(issueDate, invoice.recurrence_interval_months || 1)
+  // Invoice month/period — editable via month pickers, but initialized from
+  // whatever was actually saved (parsed back), not silently recomputed.
+  const parsedInvoicePeriod = parsePeriodLabel(invoice.invoice_month)
+  const defaultFrom = parsedInvoicePeriod?.from || dateToMonthInput(issueDate)
+  const defaultTo =
+    parsedInvoicePeriod?.to || addMonthsToMonthInput(defaultFrom, Number(invoice.recurrence_interval_months || 1) - 1)
+  const [periodFrom, setPeriodFrom] = useState(defaultFrom)
+  const [periodTo, setPeriodTo] = useState(defaultTo)
+  const invoiceMonth = periodLabelFromRange(periodFrom, periodTo)
 
   async function toggleCancelled() {
     const newStatus = invoiceStatus === 'cancelled' ? (paymentAmount > 0 ? 'partial' : 'unpaid') : 'cancelled'
@@ -1150,10 +1195,25 @@ function EditInvoicePage({ invoice, students, onBack, onSaved }) {
               <label className="text-xs text-ink-500 mb-1 block">Invoice Created By</label>
               <input className={readOnlyField} value={createdByName} disabled />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="text-xs text-ink-500 mb-1 block">Invoice Month</label>
-              <input className={readOnlyField} value={invoiceMonth} disabled />
-              <p className="text-[11px] text-ink-500 mt-1">Auto-generated from the issue date — not editable.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="month"
+                  className="field-input"
+                  value={periodFrom}
+                  onChange={(e) => setPeriodFrom(e.target.value)}
+                />
+                <input
+                  type="month"
+                  className="field-input"
+                  value={periodTo}
+                  onChange={(e) => setPeriodTo(e.target.value)}
+                />
+              </div>
+              <p className="text-[11px] text-ink-500 mt-1">
+                Will show as "<span className="font-medium">{invoiceMonth}</span>"
+              </p>
             </div>
             <div>
               <label className="text-xs text-ink-500 mb-1 block">Class (optional)</label>

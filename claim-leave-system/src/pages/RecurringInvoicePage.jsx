@@ -27,6 +27,54 @@ function computePeriodLabel(dateStr, intervalMonths) {
   return `${startLabel} - ${endLabel}`
 }
 
+// Month-picker helpers: "YYYY-MM" <-> "Month YYYY" label, used to let admins
+// pick the billing period from a real calendar control instead of typing.
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+function dateToMonthInput(dateStr) {
+  return dateStr ? dateStr.slice(0, 7) : ''
+}
+
+function monthInputToLabel(monthStr) {
+  if (!monthStr) return ''
+  const [y, m] = monthStr.split('-').map(Number)
+  return `${MONTH_NAMES[m - 1]} ${y}`
+}
+
+function addMonthsToMonthInput(monthStr, months) {
+  const [y, m] = monthStr.split('-').map(Number)
+  const d = new Date(y, m - 1 + months, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function periodLabelFromRange(fromMonth, toMonth) {
+  if (!fromMonth) return ''
+  if (!toMonth || toMonth === fromMonth) return monthInputToLabel(fromMonth)
+  return `${monthInputToLabel(fromMonth)} - ${monthInputToLabel(toMonth)}`
+}
+
+// Parses a previously-saved label like "October 2026" or
+// "October 2026 - April 2027" back into month-picker values, so editing an
+// existing plan/invoice starts from what was actually saved, not a guess.
+function parsePeriodLabel(label) {
+  if (!label) return null
+  const parseOne = (s) => {
+    const m = s.trim().match(/^([A-Za-z]+)\s+(\d{4})$/)
+    if (!m) return null
+    const idx = MONTH_NAMES.findIndex((name) => name.toLowerCase() === m[1].toLowerCase())
+    if (idx === -1) return null
+    return `${m[2]}-${String(idx + 1).padStart(2, '0')}`
+  }
+  const parts = label.split(' - ')
+  const from = parseOne(parts[0])
+  if (!from) return null
+  const to = parts[1] ? parseOne(parts[1]) : from
+  return { from, to: to || from }
+}
+
 function RowMenu({ onEdit, onGenerate, onDelete }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -367,55 +415,53 @@ export default function RecurringInvoicePage() {
         <EmptyState icon={CalendarClock} title="No recurring invoices found" description="Try clearing filters, or create your first plan above." />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-sand-100 text-ink-500 text-left">
-                <tr>
-                  <th className="px-3 py-3">
-                    <input type="checkbox" checked={selected.size === visible.length} onChange={toggleSelectAll} />
-                  </th>
-                  <th className="px-4 py-3 font-medium">Student Name</th>
-                  <th className="px-4 py-3 font-medium min-w-[200px]">Description</th>
-                  <th className="px-4 py-3 font-medium">Total Amount</th>
-                  <th className="px-4 py-3 font-medium">Frequency</th>
-                  <th className="px-4 py-3 font-medium">Next Generation Date</th>
-                  <th className="px-4 py-3 font-medium">Next Invoice Month</th>
-                  <th className="px-4 py-3 font-medium" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sand-100">
-                {visible.map((p) => {
-                  const total = (p.items || []).reduce((s, it) => s + Number(it.amount || 0), 0) || Number(p.amount || 0)
-                  const desc = (p.items || []).map((it) => it.description).filter(Boolean).join(', ')
-                  return (
-                    <tr key={p.id}>
-                      <td className="px-3 py-3 align-top">
-                        <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} />
-                      </td>
-                      <td className="px-4 py-3 align-top font-medium text-ink-900 whitespace-nowrap">{p.students?.full_name}</td>
-                      <td className="px-4 py-3 align-top text-ink-700 whitespace-normal min-w-[200px] max-w-[320px]">{desc || '—'}</td>
-                      <td className="px-4 py-3 align-top text-ink-700 whitespace-nowrap">RM {total.toFixed(2)}</td>
-                      <td className="px-4 py-3 align-top text-ink-700 whitespace-nowrap">{frequencyLabel(p.recurrence_interval_months)}</td>
-                      <td className="px-4 py-3 align-top text-ink-700 whitespace-nowrap">{formatDate(p.next_generation_date)}</td>
-                      <td className="px-4 py-3 align-top text-ink-700 whitespace-nowrap">
-                        {p.next_invoice_month || computePeriodLabel(p.next_generation_date, p.recurrence_interval_months)}
-                      </td>
-                      <td className="px-4 py-3 align-top text-right whitespace-nowrap">
-                        <RowMenu
-                          onEdit={() => {
-                            setActivePlan(p)
-                            setView('edit')
-                          }}
-                          onGenerate={() => setGeneratingPlan(p)}
-                          onDelete={() => deletePlan(p.id)}
-                        />
-                      </td>
+          <table className="w-full text-xs table-fixed">
+            <thead className="bg-sand-100 text-ink-500 text-left">
+              <tr>
+                <th className="px-2 py-2 w-[4%]">
+                  <input type="checkbox" checked={selected.size === visible.length} onChange={toggleSelectAll} />
+                </th>
+                <th className="px-2 py-2 font-medium w-[14%]">Student</th>
+                <th className="px-2 py-2 font-medium w-[27%]">Description</th>
+                <th className="px-2 py-2 font-medium w-[11%]">Amount</th>
+                <th className="px-2 py-2 font-medium w-[11%]">Frequency</th>
+                <th className="px-2 py-2 font-medium w-[12%]">Next Gen</th>
+                <th className="px-2 py-2 font-medium w-[15%]">Next Month</th>
+                <th className="px-2 py-2 font-medium w-[6%]" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sand-100">
+              {visible.map((p) => {
+                const total = (p.items || []).reduce((s, it) => s + Number(it.amount || 0), 0) || Number(p.amount || 0)
+                const desc = (p.items || []).map((it) => it.description).filter(Boolean).join(', ')
+                return (
+                  <tr key={p.id}>
+                    <td className="px-2 py-2 align-top">
+                      <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                    </td>
+                    <td className="px-2 py-2 align-top font-medium text-ink-900 whitespace-normal break-words">{p.students?.full_name}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal break-words">{desc || '—'}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">RM {total.toFixed(2)}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">{frequencyLabel(p.recurrence_interval_months)}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">{formatDate(p.next_generation_date)}</td>
+                    <td className="px-2 py-2 align-top text-ink-700 whitespace-normal">
+                      {p.next_invoice_month || computePeriodLabel(p.next_generation_date, p.recurrence_interval_months)}
+                    </td>
+                    <td className="px-2 py-2 align-top text-right">
+                      <RowMenu
+                        onEdit={() => {
+                          setActivePlan(p)
+                          setView('edit')
+                        }}
+                        onGenerate={() => setGeneratingPlan(p)}
+                        onDelete={() => deletePlan(p.id)}
+                      />
+                    </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-          </div>
         </div>
       )}
 
@@ -509,22 +555,43 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
   const [nextGenerationDate, setNextGenerationDate] = useState(
     plan?.next_generation_date || new Date().toISOString().slice(0, 10)
   )
-  const [nextInvoiceMonth, setNextInvoiceMonth] = useState(
-    plan?.next_invoice_month || computePeriodLabel(plan?.next_generation_date || new Date().toISOString().slice(0, 10), plan?.recurrence_interval_months || 1)
-  )
-  const [monthEdited, setMonthEdited] = useState(false)
+
+  const parsedPeriod = parsePeriodLabel(plan?.next_invoice_month)
+  const initialFrom = parsedPeriod?.from || dateToMonthInput(plan?.next_generation_date || new Date().toISOString().slice(0, 10))
+  const initialTo =
+    parsedPeriod?.to || addMonthsToMonthInput(initialFrom, Number(plan?.recurrence_interval_months || 1) - 1)
+  const [periodFrom, setPeriodFrom] = useState(initialFrom)
+  const [periodTo, setPeriodTo] = useState(initialTo)
+  const [monthsEdited, setMonthsEdited] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const total = items.reduce((s, it) => s + Number(it.amount || 0), 0)
+  const nextInvoiceMonth = periodLabelFromRange(periodFrom, periodTo)
 
   function handleDateChange(value) {
     setNextGenerationDate(value)
-    if (!monthEdited) setNextInvoiceMonth(computePeriodLabel(value, recurrence))
+    if (!monthsEdited) {
+      const fromM = dateToMonthInput(value)
+      setPeriodFrom(fromM)
+      setPeriodTo(addMonthsToMonthInput(fromM, Number(recurrence) - 1))
+    }
   }
   function handleRecurrenceChange(value) {
     setRecurrence(value)
-    if (!monthEdited) setNextInvoiceMonth(computePeriodLabel(nextGenerationDate, value))
+    if (!monthsEdited) {
+      const fromM = dateToMonthInput(nextGenerationDate)
+      setPeriodFrom(fromM)
+      setPeriodTo(addMonthsToMonthInput(fromM, Number(value) - 1))
+    }
+  }
+  function handlePeriodFromChange(value) {
+    setMonthsEdited(true)
+    setPeriodFrom(value)
+  }
+  function handlePeriodToChange(value) {
+    setMonthsEdited(true)
+    setPeriodTo(value)
   }
 
   async function handleSave(e) {
@@ -608,31 +675,39 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
               ))}
             </select>
           </div>
+          <div>
+            <label className="field-label">Next generation date</label>
+            <input
+              type="date"
+              className="field-input max-w-xs"
+              value={nextGenerationDate}
+              onChange={(e) => handleDateChange(e.target.value)}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="field-label">Next generation date</label>
+              <label className="field-label">Billing period — from month</label>
               <input
-                type="date"
+                type="month"
                 className="field-input"
-                value={nextGenerationDate}
-                onChange={(e) => handleDateChange(e.target.value)}
+                value={periodFrom}
+                onChange={(e) => handlePeriodFromChange(e.target.value)}
               />
             </div>
             <div>
-              <label className="field-label">Next invoice month</label>
+              <label className="field-label">Billing period — to month</label>
               <input
+                type="month"
                 className="field-input"
-                value={nextInvoiceMonth}
-                onChange={(e) => {
-                  setMonthEdited(true)
-                  setNextInvoiceMonth(e.target.value)
-                }}
+                value={periodTo}
+                onChange={(e) => handlePeriodToChange(e.target.value)}
               />
             </div>
           </div>
           <p className="text-xs text-ink-500">
-            Suggested automatically from the date and frequency above — edit it if the actual billing
-            period doesn't line up with calendar months.
+            Suggested automatically from the date and frequency above — pick different months if the
+            actual billing period doesn't line up with calendar defaults. Will show as "
+            <span className="font-medium">{nextInvoiceMonth}</span>".
           </p>
         </div>
 
@@ -653,28 +728,43 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
 // month is always derived from that date automatically, never typed.
 function GenerateInvoiceModal({ plan, onClose, onGenerate }) {
   const [invoiceDate, setInvoiceDate] = useState(plan.next_generation_date)
-  const [invoiceMonth, setInvoiceMonth] = useState(computePeriodLabel(plan.next_generation_date, plan.recurrence_interval_months))
-  const [monthEdited, setMonthEdited] = useState(false)
+
+  const initialFrom = dateToMonthInput(plan.next_generation_date)
+  const initialTo = addMonthsToMonthInput(initialFrom, plan.recurrence_interval_months - 1)
+  const [periodFrom, setPeriodFrom] = useState(initialFrom)
+  const [periodTo, setPeriodTo] = useState(initialTo)
+  const [monthsEdited, setMonthsEdited] = useState(false)
+
+  const nextInitialFrom = addMonthsToMonthInput(initialFrom, plan.recurrence_interval_months)
+  const nextInitialTo = addMonthsToMonthInput(nextInitialFrom, plan.recurrence_interval_months - 1)
   const [nextGenDate, setNextGenDate] = useState(() => {
     const d = new Date(`${plan.next_generation_date}T00:00:00`)
     d.setMonth(d.getMonth() + plan.recurrence_interval_months)
     return d.toISOString().slice(0, 10)
   })
-  const [nextInvoiceMonthVal, setNextInvoiceMonthVal] = useState(() => {
-    const d = new Date(`${plan.next_generation_date}T00:00:00`)
-    d.setMonth(d.getMonth() + plan.recurrence_interval_months)
-    return computePeriodLabel(d.toISOString().slice(0, 10), plan.recurrence_interval_months)
-  })
-  const [nextMonthEdited, setNextMonthEdited] = useState(false)
+  const [nextPeriodFrom, setNextPeriodFrom] = useState(nextInitialFrom)
+  const [nextPeriodTo, setNextPeriodTo] = useState(nextInitialTo)
+  const [nextMonthsEdited, setNextMonthsEdited] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const invoiceMonth = periodLabelFromRange(periodFrom, periodTo)
+  const nextInvoiceMonthVal = periodLabelFromRange(nextPeriodFrom, nextPeriodTo)
 
   function handleInvoiceDateChange(value) {
     setInvoiceDate(value)
-    if (!monthEdited) setInvoiceMonth(computePeriodLabel(value, plan.recurrence_interval_months))
+    if (!monthsEdited) {
+      const fromM = dateToMonthInput(value)
+      setPeriodFrom(fromM)
+      setPeriodTo(addMonthsToMonthInput(fromM, plan.recurrence_interval_months - 1))
+    }
   }
   function handleNextGenDateChange(value) {
     setNextGenDate(value)
-    if (!nextMonthEdited) setNextInvoiceMonthVal(computePeriodLabel(value, plan.recurrence_interval_months))
+    if (!nextMonthsEdited) {
+      const fromM = dateToMonthInput(value)
+      setNextPeriodFrom(fromM)
+      setNextPeriodTo(addMonthsToMonthInput(fromM, plan.recurrence_interval_months - 1))
+    }
   }
 
   async function handleGenerate(e) {
@@ -685,8 +775,8 @@ function GenerateInvoiceModal({ plan, onClose, onGenerate }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="card w-full max-w-sm p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+      <div className="card w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-ink-900">Generate invoice · {plan.students?.full_name}</h3>
           <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
@@ -696,43 +786,75 @@ function GenerateInvoiceModal({ plan, onClose, onGenerate }) {
         <form onSubmit={handleGenerate} className="space-y-4">
           <div className="border-b border-sand-200 pb-4">
             <p className="text-xs font-semibold text-ink-500 uppercase mb-2">This invoice</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Invoice date</label>
+              <input type="date" className="field-input" value={invoiceDate} onChange={(e) => handleInvoiceDateChange(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="field-label">Invoice date</label>
-                <input type="date" className="field-input" value={invoiceDate} onChange={(e) => handleInvoiceDateChange(e.target.value)} />
+                <label className="field-label">Period — from month</label>
+                <input
+                  type="month"
+                  className="field-input"
+                  value={periodFrom}
+                  onChange={(e) => {
+                    setMonthsEdited(true)
+                    setPeriodFrom(e.target.value)
+                  }}
+                />
               </div>
               <div>
-                <label className="field-label">Invoice month</label>
+                <label className="field-label">Period — to month</label>
                 <input
+                  type="month"
                   className="field-input"
-                  value={invoiceMonth}
+                  value={periodTo}
                   onChange={(e) => {
-                    setMonthEdited(true)
-                    setInvoiceMonth(e.target.value)
+                    setMonthsEdited(true)
+                    setPeriodTo(e.target.value)
                   }}
                 />
               </div>
             </div>
+            <p className="text-xs text-ink-500 mt-2">
+              Will show as "<span className="font-medium">{invoiceMonth}</span>"
+            </p>
           </div>
           <div>
             <p className="text-xs font-semibold text-ink-500 uppercase mb-2">After generating, set next to</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="field-label">Next generation date</label>
+              <input type="date" className="field-input" value={nextGenDate} onChange={(e) => handleNextGenDateChange(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="field-label">Next generation date</label>
-                <input type="date" className="field-input" value={nextGenDate} onChange={(e) => handleNextGenDateChange(e.target.value)} />
+                <label className="field-label">Period — from month</label>
+                <input
+                  type="month"
+                  className="field-input"
+                  value={nextPeriodFrom}
+                  onChange={(e) => {
+                    setNextMonthsEdited(true)
+                    setNextPeriodFrom(e.target.value)
+                  }}
+                />
               </div>
               <div>
-                <label className="field-label">Next invoice month</label>
+                <label className="field-label">Period — to month</label>
                 <input
+                  type="month"
                   className="field-input"
-                  value={nextInvoiceMonthVal}
+                  value={nextPeriodTo}
                   onChange={(e) => {
-                    setNextMonthEdited(true)
-                    setNextInvoiceMonthVal(e.target.value)
+                    setNextMonthsEdited(true)
+                    setNextPeriodTo(e.target.value)
                   }}
                 />
               </div>
             </div>
+            <p className="text-xs text-ink-500 mt-2">
+              Will show as "<span className="font-medium">{nextInvoiceMonthVal}</span>"
+            </p>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">

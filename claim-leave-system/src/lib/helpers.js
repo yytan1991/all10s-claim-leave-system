@@ -1,7 +1,13 @@
 export function formatDate(dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (!dateStr) return ''
+  const datePart = dateStr.slice(0, 10) // handles both 'YYYY-MM-DD' and full timestamps
+  const [y, m, d] = datePart.split('-').map(Number)
+  if (!y || !m || !d) return dateStr
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ]
+  return `${d} ${MONTH_NAMES[m - 1]} ${y}`
 }
 
 export function formatMoney(amount) {

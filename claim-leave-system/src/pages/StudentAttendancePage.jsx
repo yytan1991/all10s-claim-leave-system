@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
+import { formatDate } from '../lib/helpers'
 
 // classes.day_of_week uses 0 = Monday ... 6 = Sunday. JS Date#getDay() uses
 // 0 = Sunday ... 6 = Saturday, so convert before comparing.
@@ -16,6 +17,11 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function nowTimeStr() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function formatTime(isoString) {
   if (!isoString) return ''
   return new Date(isoString).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' })
@@ -26,8 +32,9 @@ export default function StudentAttendancePage() {
   const [allClasses, setAllClasses] = useState([])
   const [classId, setClassId] = useState('')
   const [date, setDate] = useState(todayStr())
+  const [time, setTime] = useState(nowTimeStr())
   const [students, setStudents] = useState([])
-  const [records, setRecords] = useState({}) // studentId -> { status, updatedAt }
+  const [records, setRecords] = useState({}) // studentId -> { status, markedAt, markedByName }
   const [loading, setLoading] = useState(true)
   const [rosterLoading, setRosterLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -62,13 +69,14 @@ export default function StudentAttendancePage() {
   }
 
   // Teachers can only mark attendance for today, and only for classes
-  // actually scheduled today. Admins can pick any class and any date up to
-  // today (never in the future).
+  // actually scheduled today. Admins can pick any class, any date up to
+  // today, and adjust the recorded time freely (for backdating).
   const visibleClasses = isAdmin ? allClasses : allClasses.filter((c) => c.day_of_week === todayAppDow())
 
   useEffect(() => {
     if (!isAdmin) {
       setDate(todayStr())
+      setTime(nowTimeStr())
     }
     if (visibleClasses.length > 0 && !visibleClasses.some((c) => c.id === classId)) {
       setClassId(visibleClasses[0].id)
@@ -95,7 +103,7 @@ export default function StudentAttendancePage() {
         .eq('org_id', profile.org_id),
       supabase
         .from('student_attendance')
-        .select('student_id, status, updated_at')
+        .select('student_id, status, marked_at, profiles(full_name)')
         .eq('class_id', classId)
         .eq('attendance_date', date),
     ])
@@ -107,26 +115,32 @@ export default function StudentAttendancePage() {
 
     const recMap = {}
     ;(attendance || []).forEach((a) => {
-      recMap[a.student_id] = { status: a.status, updatedAt: a.updated_at }
+      recMap[a.student_id] = { status: a.status, markedAt: a.marked_at, markedByName: a.profiles?.full_name }
     })
     setRecords(recMap)
     setRosterLoading(false)
+  }
+
+  function currentMarkedAt() {
+    if (!isAdmin) return new Date().toISOString()
+    return new Date(`${date}T${time}:00`).toISOString()
   }
 
   function setStatus(studentId, status) {
     setRecords((prev) => {
       const next = { ...prev }
       if (next[studentId]?.status === status) delete next[studentId] // clicking the active one clears back to Unmarked
-      else next[studentId] = { status, updatedAt: new Date().toISOString() }
+      else next[studentId] = { status, markedAt: currentMarkedAt(), markedByName: profile.full_name }
       return next
     })
   }
 
   function markAllAttended() {
+    const markedAt = currentMarkedAt()
     setRecords(() => {
       const next = {}
       students.forEach((s) => {
-        next[s.id] = { status: 'present', updatedAt: new Date().toISOString() }
+        next[s.id] = { status: 'present', markedAt, markedByName: profile.full_name }
       })
       return next
     })
@@ -137,6 +151,7 @@ export default function StudentAttendancePage() {
     setError('')
     setSaved(false)
 
+    const markedAt = currentMarkedAt()
     const toUpsert = students
       .filter((s) => records[s.id]?.status)
       .map((s) => ({
@@ -146,6 +161,7 @@ export default function StudentAttendancePage() {
         attendance_date: date,
         status: records[s.id].status,
         marked_by: profile.id,
+        marked_at: markedAt,
       }))
     const toClear = students.filter((s) => !records[s.id]?.status).map((s) => s.id)
 
@@ -185,9 +201,12 @@ export default function StudentAttendancePage() {
     { value: 'late', label: 'Late' },
   ]
 
+  const markedCount = students.filter((s) => records[s.id]?.status).length
+  const isComplete = students.length > 0 && markedCount === students.length
+
   return (
     <AppLayout title="Student Attendance" subtitle="Mark attendance for a class on a specific date.">
-      <div className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className={`card p-5 mb-6 grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <div>
           <label className="field-label">Class</label>
           <select
@@ -219,6 +238,13 @@ export default function StudentAttendancePage() {
           />
           {!isAdmin && <p className="text-[11px] text-ink-500 mt-1">Teachers can only mark today's attendance.</p>}
         </div>
+        {isAdmin && (
+          <div>
+            <label className="field-label">Time</label>
+            <input type="time" className="field-input" value={time} onChange={(e) => setTime(e.target.value)} />
+            <p className="text-[11px] text-ink-500 mt-1">Recorded time for whatever you mark/save below.</p>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -250,7 +276,14 @@ export default function StudentAttendancePage() {
         <EmptyState icon={ClipboardList} title="No students enrolled" description="Enroll students into this class first." />
       ) : (
         <>
-          <div className="flex justify-end mb-3">
+          <div className={`mb-3 flex items-center justify-between rounded-md px-4 py-2 text-sm font-medium ${
+            isComplete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            <span>
+              {isComplete
+                ? 'All students marked for this session.'
+                : `${students.length - markedCount} of ${students.length} student(s) not yet marked.`}
+            </span>
             <button type="button" onClick={markAllAttended} className="btn-secondary text-xs">
               <CheckCheck size={14} /> Mark all attended
             </button>
@@ -261,6 +294,7 @@ export default function StudentAttendancePage() {
                 <tr>
                   <th className="px-5 py-3 font-medium">Student</th>
                   <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium">Marked by</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand-100">
@@ -283,10 +317,17 @@ export default function StudentAttendancePage() {
                             </button>
                           ))}
                           {!status && <span className="text-xs text-ink-400 ml-1">Unmarked</span>}
-                          {status && record?.updatedAt && (
-                            <span className="text-xs text-ink-500 ml-1">at {formatTime(record.updatedAt)}</span>
-                          )}
                         </div>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-ink-500">
+                        {status && record?.markedByName ? (
+                          <>
+                            {record.markedByName}
+                            {record.markedAt && <> · {formatDate(record.markedAt)} {formatTime(record.markedAt)}</>}
+                          </>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </tr>
                   )

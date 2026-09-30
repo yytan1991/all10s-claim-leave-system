@@ -1,17 +1,33 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList } from 'lucide-react'
+import { ClipboardList, CheckCheck } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
 
+// classes.day_of_week uses 0 = Monday ... 6 = Sunday. JS Date#getDay() uses
+// 0 = Sunday ... 6 = Saturday, so convert before comparing.
+function todayAppDow() {
+  const jsDay = new Date().getDay()
+  return jsDay === 0 ? 6 : jsDay - 1
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function formatTime(isoString) {
+  if (!isoString) return ''
+  return new Date(isoString).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' })
+}
+
 export default function StudentAttendancePage() {
   const { profile, isAdmin } = useAuth()
-  const [classes, setClasses] = useState([])
+  const [allClasses, setAllClasses] = useState([])
   const [classId, setClassId] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayStr())
   const [students, setStudents] = useState([])
-  const [records, setRecords] = useState({})
+  const [records, setRecords] = useState({}) // studentId -> { status, updatedAt }
   const [loading, setLoading] = useState(true)
   const [rosterLoading, setRosterLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -41,10 +57,26 @@ export default function StudentAttendancePage() {
       filtered = filtered.filter((c) => allowedIds.has(c.id))
     }
 
-    setClasses(filtered)
-    if (filtered.length > 0) setClassId((prev) => prev || filtered[0].id)
+    setAllClasses(filtered)
     setLoading(false)
   }
+
+  // Teachers can only mark attendance for today, and only for classes
+  // actually scheduled today. Admins can pick any class and any date up to
+  // today (never in the future).
+  const visibleClasses = isAdmin ? allClasses : allClasses.filter((c) => c.day_of_week === todayAppDow())
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setDate(todayStr())
+    }
+    if (visibleClasses.length > 0 && !visibleClasses.some((c) => c.id === classId)) {
+      setClassId(visibleClasses[0].id)
+    } else if (visibleClasses.length === 0) {
+      setClassId('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allClasses, isAdmin])
 
   useEffect(() => {
     if (classId && date) loadRoster()
@@ -63,7 +95,7 @@ export default function StudentAttendancePage() {
         .eq('org_id', profile.org_id),
       supabase
         .from('student_attendance')
-        .select('student_id, status')
+        .select('student_id, status, updated_at')
         .eq('class_id', classId)
         .eq('attendance_date', date),
     ])
@@ -75,7 +107,7 @@ export default function StudentAttendancePage() {
 
     const recMap = {}
     ;(attendance || []).forEach((a) => {
-      recMap[a.student_id] = a.status
+      recMap[a.student_id] = { status: a.status, updatedAt: a.updated_at }
     })
     setRecords(recMap)
     setRosterLoading(false)
@@ -84,8 +116,18 @@ export default function StudentAttendancePage() {
   function setStatus(studentId, status) {
     setRecords((prev) => {
       const next = { ...prev }
-      if (next[studentId] === status) delete next[studentId] // clicking the active one clears back to Unmarked
-      else next[studentId] = status
+      if (next[studentId]?.status === status) delete next[studentId] // clicking the active one clears back to Unmarked
+      else next[studentId] = { status, updatedAt: new Date().toISOString() }
+      return next
+    })
+  }
+
+  function markAllAttended() {
+    setRecords(() => {
+      const next = {}
+      students.forEach((s) => {
+        next[s.id] = { status: 'present', updatedAt: new Date().toISOString() }
+      })
       return next
     })
   }
@@ -96,16 +138,16 @@ export default function StudentAttendancePage() {
     setSaved(false)
 
     const toUpsert = students
-      .filter((s) => records[s.id])
+      .filter((s) => records[s.id]?.status)
       .map((s) => ({
         org_id: profile.org_id,
         class_id: classId,
         student_id: s.id,
         attendance_date: date,
-        status: records[s.id],
+        status: records[s.id].status,
         marked_by: profile.id,
       }))
-    const toClear = students.filter((s) => !records[s.id]).map((s) => s.id)
+    const toClear = students.filter((s) => !records[s.id]?.status).map((s) => s.id)
 
     if (toUpsert.length > 0) {
       const { error: upsertError } = await supabase
@@ -134,6 +176,7 @@ export default function StudentAttendancePage() {
 
     setSaving(false)
     setSaved(true)
+    loadRoster()
   }
 
   const STATUS_OPTIONS = [
@@ -147,18 +190,34 @@ export default function StudentAttendancePage() {
       <div className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="field-label">Class</label>
-          <select className="field-input" value={classId} onChange={(e) => setClassId(e.target.value)} disabled={classes.length === 0}>
-            {classes.length === 0 && <option value="">No classes available</option>}
-            {classes.map((c) => (
+          <select
+            className="field-input"
+            value={classId}
+            onChange={(e) => setClassId(e.target.value)}
+            disabled={visibleClasses.length === 0}
+          >
+            {visibleClasses.length === 0 && <option value="">No classes available</option>}
+            {visibleClasses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
+          {!isAdmin && (
+            <p className="text-[11px] text-ink-500 mt-1">Only showing classes scheduled for today.</p>
+          )}
         </div>
         <div>
           <label className="field-label">Date</label>
-          <input type="date" className="field-input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            type="date"
+            className="field-input"
+            value={date}
+            max={todayStr()}
+            onChange={(e) => setDate(e.target.value)}
+            disabled={!isAdmin}
+          />
+          {!isAdmin && <p className="text-[11px] text-ink-500 mt-1">Teachers can only mark today's attendance.</p>}
         </div>
       </div>
 
@@ -175,52 +234,67 @@ export default function StudentAttendancePage() {
 
       {loading ? (
         <p className="text-sm text-ink-500">Loading…</p>
-      ) : classes.length === 0 ? (
+      ) : visibleClasses.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
           title="No classes available"
-          description={isAdmin ? 'Create a class first, under Student Management.' : "You're not assigned to teach any classes yet."}
+          description={
+            isAdmin
+              ? 'Create a class first, under Student Management.'
+              : "You have no classes scheduled today, or you're not assigned to teach any."
+          }
         />
       ) : rosterLoading ? (
         <p className="text-sm text-ink-500">Loading roster…</p>
       ) : students.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No students enrolled" description="Enroll students into this class first." />
       ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-sand-100 text-ink-500 text-left">
-              <tr>
-                <th className="px-5 py-3 font-medium">Student</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sand-100">
-              {students.map((s) => {
-                const status = records[s.id] || null
-                return (
-                  <tr key={s.id}>
-                    <td className="px-5 py-3 font-medium text-ink-900">{s.full_name}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        {STATUS_OPTIONS.map((o) => (
-                          <button
-                            key={o.value}
-                            type="button"
-                            onClick={() => setStatus(s.id, o.value)}
-                            className={status === o.value ? 'btn-primary text-xs' : 'btn-secondary text-xs'}
-                          >
-                            {o.label}
-                          </button>
-                        ))}
-                        {!status && <span className="text-xs text-ink-400 ml-1">Unmarked</span>}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="flex justify-end mb-3">
+            <button type="button" onClick={markAllAttended} className="btn-secondary text-xs">
+              <CheckCheck size={14} /> Mark all attended
+            </button>
+          </div>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-sand-100 text-ink-500 text-left">
+                <tr>
+                  <th className="px-5 py-3 font-medium">Student</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sand-100">
+                {students.map((s) => {
+                  const record = records[s.id]
+                  const status = record?.status || null
+                  return (
+                    <tr key={s.id}>
+                      <td className="px-5 py-3 font-medium text-ink-900">{s.full_name}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          {STATUS_OPTIONS.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => setStatus(s.id, o.value)}
+                              className={status === o.value ? 'btn-primary text-xs' : 'btn-secondary text-xs'}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                          {!status && <span className="text-xs text-ink-400 ml-1">Unmarked</span>}
+                          {status && record?.updatedAt && (
+                            <span className="text-xs text-ink-500 ml-1">at {formatTime(record.updatedAt)}</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {students.length > 0 && !rosterLoading && (

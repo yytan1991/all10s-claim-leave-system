@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users2, School, UserCog, Receipt, AlertTriangle } from 'lucide-react'
+import { Users2, School, UserCog, AlertTriangle, ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { StatCard } from '../components/UI'
 import { formatDate } from '../lib/helpers'
+
+function todayAppDow() {
+  const jsDay = new Date().getDay()
+  return jsDay === 0 ? 6 : jsDay - 1
+}
 
 export default function StudentDashboard() {
   const { profile } = useAuth()
@@ -13,6 +18,7 @@ export default function StudentDashboard() {
   const [classes, setClasses] = useState([])
   const [teacherLinks, setTeacherLinks] = useState([])
   const [invoices, setInvoices] = useState([])
+  const [todayAttendance, setTodayAttendance] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -22,19 +28,32 @@ export default function StudentDashboard() {
 
   async function load() {
     setLoading(true)
-    const [{ data: studentData }, { data: classData }, { data: teacherData }, { data: invoiceData }] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10)
+    const [
+      { data: studentData },
+      { data: classData },
+      { data: teacherData },
+      { data: invoiceData },
+      { data: attendanceData },
+    ] = await Promise.all([
       supabase.from('students').select('id').eq('org_id', profile.org_id),
-      supabase.from('classes').select('id').eq('org_id', profile.org_id),
+      supabase.from('classes').select('id, name, day_of_week').eq('org_id', profile.org_id),
       supabase.from('class_teachers').select('teacher_id').eq('org_id', profile.org_id),
       supabase
         .from('student_invoices')
         .select('id, amount, payment_amount, status, issue_date, students(full_name)')
         .eq('org_id', profile.org_id),
+      supabase
+        .from('student_attendance')
+        .select('class_id, status')
+        .eq('org_id', profile.org_id)
+        .eq('attendance_date', today),
     ])
     setStudents(studentData || [])
     setClasses(classData || [])
     setTeacherLinks(teacherData || [])
     setInvoices(invoiceData || [])
+    setTodayAttendance(attendanceData || [])
     setLoading(false)
   }
 
@@ -43,8 +62,6 @@ export default function StudentDashboard() {
   const today = new Date().toISOString().slice(0, 10)
   const thisMonthPrefix = today.slice(0, 7)
 
-  const thisMonthInvoices = invoices.filter((i) => i.issue_date?.slice(0, 7) === thisMonthPrefix)
-  const thisMonthRevenue = thisMonthInvoices.reduce((s, i) => s + Number(i.payment_amount || 0), 0)
   const outstanding = invoices
     .filter((i) => i.status !== 'cancelled')
     .reduce((s, i) => s + Math.max(Number(i.amount) - Number(i.payment_amount || 0), 0), 0)
@@ -52,22 +69,34 @@ export default function StudentDashboard() {
     .filter((i) => i.status !== 'paid' && i.status !== 'cancelled' && i.issue_date < today)
     .sort((a, b) => a.issue_date.localeCompare(b.issue_date))
 
-  // Revenue collected per month, last 6 months
+  // Classes scheduled today, with their attendance counts.
+  const classesToday = classes.filter((c) => c.day_of_week === todayAppDow())
+  const attendanceByClass = {}
+  todayAttendance.forEach((a) => {
+    if (!attendanceByClass[a.class_id]) attendanceByClass[a.class_id] = { present: 0, absent: 0, late: 0 }
+    attendanceByClass[a.class_id][a.status] = (attendanceByClass[a.class_id][a.status] || 0) + 1
+  })
+
+  // Sales (total billed) and pending collection, grouped by invoice issue
+  // month, last 6 months.
   const now = new Date()
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
     return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('en-MY', { month: 'short' }) }
   })
-  const revenueByMonth = months.map(({ key, label }) => {
-    const total = invoices
-      .filter((i) => i.issue_date?.slice(0, 7) === key)
-      .reduce((s, i) => s + Number(i.payment_amount || 0), 0)
-    return { label, total }
+  const byMonth = months.map(({ key, label }) => {
+    const monthInvoices = invoices.filter((i) => i.status !== 'cancelled' && i.issue_date?.slice(0, 7) === key)
+    const sales = monthInvoices.reduce((s, i) => s + Number(i.amount), 0)
+    const pending = monthInvoices.reduce((s, i) => s + Math.max(Number(i.amount) - Number(i.payment_amount || 0), 0), 0)
+    return { label, sales, pending }
   })
-  const maxRevenue = Math.max(1, ...revenueByMonth.map((m) => m.total))
+  const maxAmount = Math.max(1, ...byMonth.flatMap((m) => [m.sales, m.pending]))
+
+  const thisMonthSales = byMonth[byMonth.length - 1]?.sales || 0
+  const thisMonthPending = byMonth[byMonth.length - 1]?.pending || 0
 
   return (
-    <AppLayout title="Student Management" subtitle="Enrollment, classes, and billing at a glance.">
+    <AppLayout title="Student Management" subtitle="Enrollment, attendance, and billing at a glance.">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Total students" value={loading ? '—' : students.length} icon={Users2} tone="brand" />
         <StatCard label="Total classes" value={loading ? '—' : classes.length} icon={School} tone="brand" />
@@ -81,30 +110,31 @@ export default function StudentDashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="card p-5">
-          <h3 className="font-semibold text-ink-900 mb-4">Revenue collected, last 6 months</h3>
+          <h3 className="font-semibold text-ink-900 mb-4">Today's class attendance</h3>
           {loading ? (
             <p className="text-sm text-ink-500">Loading…</p>
+          ) : classesToday.length === 0 ? (
+            <p className="text-sm text-ink-500">No classes scheduled today.</p>
           ) : (
-            <div className="flex items-end justify-between gap-2 h-40">
-              {revenueByMonth.map((m) => (
-                <div key={m.label} className="flex-1 flex flex-col items-center gap-1.5">
-                  <span className="text-xs text-ink-500">RM {m.total.toFixed(0)}</span>
-                  <div className="w-full flex items-end h-28">
-                    <div
-                      className="w-full rounded-t bg-brand-500"
-                      style={{ height: `${(m.total / maxRevenue) * 100}%`, minHeight: m.total > 0 ? '4px' : '0px' }}
-                    />
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {classesToday.map((c) => {
+                const counts = attendanceByClass[c.id] || {}
+                return (
+                  <div key={c.id} className="flex items-center justify-between px-1 py-1.5 text-sm">
+                    <span className="text-ink-900">{c.name}</span>
+                    <span className="text-xs text-ink-500">
+                      {counts.present || 0} present · {counts.absent || 0} absent · {counts.late || 0} late
+                    </span>
                   </div>
-                  <span className="text-xs text-ink-500">{m.label}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
-          <p className="mt-4 text-sm text-ink-700">
-            This month: <span className="font-semibold">RM {thisMonthRevenue.toFixed(2)}</span> collected
-          </p>
+          <Link to="/student-attendance" className="btn-secondary text-xs mt-4 inline-flex">
+            <ClipboardList size={13} /> Mark attendance
+          </Link>
         </div>
 
         <div className="card p-5">
@@ -134,9 +164,48 @@ export default function StudentDashboard() {
         </div>
       </div>
 
+      <div className="card p-5">
+        <h3 className="font-semibold text-ink-900 mb-4">Sales vs pending collection, last 6 months</h3>
+        {loading ? (
+          <p className="text-sm text-ink-500">Loading…</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-4 text-xs text-ink-500 mb-3">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-brand-500" /> Total sales
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-400" /> Pending collection
+              </span>
+            </div>
+            <div className="flex items-end justify-between gap-3 h-40">
+              {byMonth.map((m) => (
+                <div key={m.label} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div className="w-full flex items-end gap-1 h-28">
+                    <div
+                      className="flex-1 rounded-t bg-brand-500"
+                      style={{ height: `${(m.sales / maxAmount) * 100}%`, minHeight: m.sales > 0 ? '4px' : '0px' }}
+                    />
+                    <div
+                      className="flex-1 rounded-t bg-rose-400"
+                      style={{ height: `${(m.pending / maxAmount) * 100}%`, minHeight: m.pending > 0 ? '4px' : '0px' }}
+                    />
+                  </div>
+                  <span className="text-xs text-ink-500">{m.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm text-ink-700">
+              This month: <span className="font-semibold">RM {thisMonthSales.toFixed(2)}</span> in sales,{' '}
+              <span className="font-semibold text-rose-600">RM {thisMonthPending.toFixed(2)}</span> still pending
+            </p>
+          </>
+        )}
+      </div>
+
       <div className="mt-6 flex justify-end gap-2">
         <Link to="/invoices" className="btn-secondary text-sm">
-          <Receipt size={14} /> View all invoices
+          View all invoices
         </Link>
         <Link to="/students" className="btn-secondary text-sm">
           View all students

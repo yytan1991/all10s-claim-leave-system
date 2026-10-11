@@ -26,7 +26,7 @@ export default function RegistrationApprovalsPage() {
   const [processingId, setProcessingId] = useState(null)
   const [error, setError] = useState('')
   const [rejectingRequest, setRejectingRequest] = useState(null)
-  const [approvedCredentials, setApprovedCredentials] = useState(null)
+  const [approvalResult, setApprovalResult] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -60,6 +60,45 @@ export default function RegistrationApprovalsPage() {
     setProcessingId(request.id)
     setError('')
 
+    const parentEmail = (request.parent_email || '').trim().toLowerCase()
+
+    // 1. Parent account. A parent who already has one (e.g. registering a second
+    //    child) is reused instead of creating a duplicate. A new parent gets an
+    //    account with no login yet — they link it themselves at first login by
+    //    verifying their email with a code.
+    let parentAccountId
+    let parentIsNew = false
+    const { data: existingParent } = await supabase
+      .from('parent_accounts')
+      .select('id')
+      .eq('org_id', request.org_id)
+      .eq('email', parentEmail)
+      .maybeSingle()
+
+    if (existingParent) {
+      parentAccountId = existingParent.id
+    } else {
+      const { data: newParent, error: parentError } = await supabase
+        .from('parent_accounts')
+        .insert({
+          user_id: null,
+          org_id: request.org_id,
+          email: parentEmail,
+          full_name: request.parent_full_name,
+          phone: request.parent_phone,
+        })
+        .select()
+        .single()
+      if (parentError) {
+        setError(parentError.message)
+        setProcessingId(null)
+        return
+      }
+      parentAccountId = newParent.id
+      parentIsNew = true
+    }
+
+    // 2. Student record
     const { data: studentRow, error: studentError } = await supabase
       .from('students')
       .insert({
@@ -77,48 +116,56 @@ export default function RegistrationApprovalsPage() {
       return
     }
 
-    const { data: parentAccountRow, error: parentError } = await supabase
-      .from('parent_accounts')
-      .insert({
-        user_id: request.parent_auth_user_id,
-        org_id: request.org_id,
-        full_name: request.parent_full_name,
-        phone: request.parent_phone,
-      })
-      .select()
-      .single()
-    if (parentError) {
-      setError(parentError.message)
+    // 3. Link parent to student
+    const { error: linkError } = await supabase
+      .from('parent_student_links')
+      .insert({ parent_account_id: parentAccountId, student_id: studentRow.id })
+    if (linkError) {
+      setError(linkError.message)
       setProcessingId(null)
       return
     }
 
-    await supabase.from('parent_student_links').insert({
-      parent_account_id: parentAccountRow.id,
-      student_id: studentRow.id,
-    })
-
+    // 4. Student login (Login Code + PIN). If this step fails the registration is
+    //    still approved — retrying the whole approval would create duplicate
+    //    students — so the admin is pointed to Parent/Student Accounts instead.
     const loginCode = generateLoginCode()
     const pin = generatePin()
-    const syntheticEmail = `${loginCode.toLowerCase()}@student.portal.internal`
+    let loginWarning = ''
+    let credentialsCreated = false
 
     const signupClient = createSignupClient()
     const { data: studentAuthData, error: studentAuthError } = await signupClient.auth.signUp({
-      email: syntheticEmail,
+      email: `${loginCode.toLowerCase()}@student.portal.internal`,
       password: pin,
     })
-    if (studentAuthError) {
-      setError(`Registration approved, but creating the student's login failed: ${studentAuthError.message}`)
-      setProcessingId(null)
-      return
-    }
 
-    await supabase.from('student_accounts').insert({
-      user_id: studentAuthData.user.id,
-      org_id: request.org_id,
-      student_id: studentRow.id,
-      login_code: loginCode,
-    })
+    if (studentAuthError || !studentAuthData?.user?.id) {
+      loginWarning = studentAuthError?.message || 'No login was returned.'
+    } else {
+      const { data: accountRow, error: accountError } = await supabase
+        .from('student_accounts')
+        .insert({
+          user_id: studentAuthData.user.id,
+          org_id: request.org_id,
+          student_id: studentRow.id,
+          login_code: loginCode,
+          pin_code: pin,
+        })
+        .select()
+        .single()
+      if (accountError) {
+        loginWarning = accountError.message
+      } else {
+        credentialsCreated = true
+        const { error: confirmError } = await supabase.rpc('confirm_student_login', {
+          p_student_account_id: accountRow.id,
+        })
+        if (confirmError) {
+          loginWarning = `The login was created but couldn't be activated automatically (${confirmError.message}).`
+        }
+      }
+    }
 
     await supabase
       .from('registration_requests')
@@ -126,7 +173,14 @@ export default function RegistrationApprovalsPage() {
       .eq('id', request.id)
 
     setProcessingId(null)
-    setApprovedCredentials({ studentName: request.student_full_name, loginCode, pin })
+    setApprovalResult({
+      studentName: request.student_full_name,
+      parentEmail,
+      parentIsNew,
+      loginCode: credentialsCreated ? loginCode : null,
+      pin: credentialsCreated ? pin : null,
+      warning: loginWarning,
+    })
     load()
   }
 
@@ -227,12 +281,8 @@ export default function RegistrationApprovalsPage() {
 
               {r.status === 'pending' && (
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => handleApprove(r)}
-                    disabled={processingId === r.id}
-                    className="btn-primary text-sm"
-                  >
-                    <Check size={14} /> Approve
+                  <button onClick={() => handleApprove(r)} disabled={processingId === r.id} className="btn-primary text-sm">
+                    <Check size={14} /> {processingId === r.id ? 'Approving…' : 'Approve'}
                   </button>
                   <button
                     onClick={() => setRejectingRequest(r)}
@@ -256,9 +306,7 @@ export default function RegistrationApprovalsPage() {
         />
       )}
 
-      {approvedCredentials && (
-        <ApprovedCredentialsModal credentials={approvedCredentials} onClose={() => setApprovedCredentials(null)} />
-      )}
+      {approvalResult && <ApprovalResultModal result={approvalResult} onClose={() => setApprovalResult(null)} />}
     </AppLayout>
   )
 }
@@ -269,7 +317,7 @@ function RejectModal({ request, onClose, onConfirm }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="card w-full max-w-sm p-6">
         <h3 className="font-semibold text-ink-900 mb-4">Reject registration — {request.student_full_name}</h3>
-        <label className="field-label">Reason (optional, shown to no one automatically yet)</label>
+        <label className="field-label">Reason (optional — kept for your own records, not shown to the parent)</label>
         <textarea className="field-input min-h-[70px]" value={reason} onChange={(e) => setReason(e.target.value)} />
         <div className="flex gap-3 pt-4">
           <button
@@ -287,32 +335,65 @@ function RejectModal({ request, onClose, onConfirm }) {
   )
 }
 
-function ApprovedCredentialsModal({ credentials, onClose }) {
-  function copyAll() {
-    navigator.clipboard.writeText(`Login Code: ${credentials.loginCode}\nPIN: ${credentials.pin}`)
+function ApprovalResultModal({ result, onClose }) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+
+  function copyStudent() {
+    navigator.clipboard.writeText(
+      `Student portal: ${origin}/student-login\nLogin Code: ${result.loginCode}\nPIN: ${result.pin}`
+    )
   }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="card w-full max-w-sm p-6">
-        <h3 className="font-semibold text-ink-900 mb-2">Registration approved</h3>
-        <p className="text-sm text-ink-500 mb-4">
-          Give these to <span className="font-medium text-ink-700">{credentials.studentName}</span> to log into the
-          student portal. This won't be shown again — copy it down now.
-        </p>
-        <div className="bg-sand-50 rounded-md p-4 mb-4 space-y-2">
-          <div className="flex justify-between">
-            <span className="text-xs text-ink-500">Login Code</span>
-            <span className="text-sm font-mono font-semibold text-ink-900">{credentials.loginCode}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-xs text-ink-500">PIN</span>
-            <span className="text-sm font-mono font-semibold text-ink-900">{credentials.pin}</span>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+      <div className="card w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="font-semibold text-ink-900 mb-3">Registration approved</h3>
+
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-ink-500 uppercase mb-1">Parent</p>
+          <p className="text-sm text-ink-700">
+            {result.parentIsNew
+              ? `Tell them to open the parent portal and choose “Get a code by email” with ${result.parentEmail}. They'll set their own password.`
+              : `${result.parentEmail} already has a portal login — ${result.studentName} now appears in it automatically.`}
+          </p>
+          <p className="text-xs text-ink-500 mt-1">{origin}/parent-login</p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={copyAll} className="btn-secondary text-sm">
-            <Copy size={14} /> Copy both
-          </button>
+
+        <div>
+          <p className="text-xs font-semibold text-ink-500 uppercase mb-1">Student — {result.studentName}</p>
+          {result.loginCode ? (
+            <>
+              <div className="bg-sand-50 rounded-md p-4 mb-2 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-xs text-ink-500">Login Code</span>
+                  <span className="text-sm font-mono font-semibold text-ink-900">{result.loginCode}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs text-ink-500">PIN</span>
+                  <span className="text-sm font-mono font-semibold text-ink-900">{result.pin}</span>
+                </div>
+              </div>
+              <p className="text-xs text-ink-500">
+                You can look the PIN up again anytime under Parent/Student Accounts if the student forgets it.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2">
+              The student's login wasn't created automatically. Create it under Parent/Student Accounts → Student Accounts.
+            </p>
+          )}
+          {result.warning && result.loginCode && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-md px-3 py-2 mt-2">{result.warning}</p>
+          )}
+          {result.warning && !result.loginCode && <p className="text-xs text-ink-500 mt-2">Reason: {result.warning}</p>}
+        </div>
+
+        <div className="flex gap-3 mt-5">
+          {result.loginCode && (
+            <button onClick={copyStudent} className="btn-secondary text-sm">
+              <Copy size={14} /> Copy student login
+            </button>
+          )}
           <button onClick={onClose} className="btn-primary text-sm">
             Done
           </button>

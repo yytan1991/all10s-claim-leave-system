@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Megaphone, ClipboardList, Receipt, CalendarClock } from 'lucide-react'
+import { Fragment, useEffect, useState } from 'react'
+import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { formatDate } from '../lib/helpers'
+import { generateInvoicePdf } from '../lib/invoicePdf'
+import { generateReceiptPdf } from '../lib/receiptPdf'
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
@@ -20,13 +22,18 @@ function statusBadge(status) {
   return <span className="text-ink-400 text-xs">Unmarked</span>
 }
 
-export default function PortalDashboard({ student }) {
+// canDownload: parents can download invoice / receipt PDFs; the student view is read-only.
+export default function PortalDashboard({ student, canDownload = false }) {
   const [tab, setTab] = useState('announcements')
   const [announcements, setAnnouncements] = useState([])
   const [attendance, setAttendance] = useState([])
   const [invoices, setInvoices] = useState([])
+  const [paymentsByInvoice, setPaymentsByInvoice] = useState({})
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState(null)
+  const [downloadingId, setDownloadingId] = useState(null)
+  const [downloadError, setDownloadError] = useState('')
 
   useEffect(() => {
     if (student?.id) load()
@@ -49,11 +56,53 @@ export default function PortalDashboard({ student }) {
         .select('classes(id, name, day_of_week, start_time, end_time, room)')
         .eq('student_id', student.id),
     ])
+
+    const invoiceList = inv || []
+    const payMap = {}
+    if (canDownload && invoiceList.length > 0) {
+      const { data: pays } = await supabase
+        .from('invoice_payments')
+        .select('*')
+        .in(
+          'invoice_id',
+          invoiceList.map((i) => i.id)
+        )
+        .order('payment_date', { ascending: false })
+      ;(pays || []).forEach((p) => {
+        if (!payMap[p.invoice_id]) payMap[p.invoice_id] = []
+        payMap[p.invoice_id].push(p)
+      })
+    }
+
     setAnnouncements(ann || [])
     setAttendance(att || [])
-    setInvoices(inv || [])
+    setInvoices(invoiceList)
+    setPaymentsByInvoice(payMap)
     setClasses((enroll || []).map((e) => e.classes).filter(Boolean))
     setLoading(false)
+  }
+
+  async function handleDownloadInvoice(inv) {
+    setDownloadError('')
+    setDownloadingId(`inv-${inv.id}`)
+    try {
+      const { data: org } = await supabase.from('organizations').select('*').eq('id', inv.org_id).single()
+      await generateInvoicePdf(inv, org, student)
+    } catch (err) {
+      setDownloadError('Could not create the invoice PDF. Please try again.')
+    }
+    setDownloadingId(null)
+  }
+
+  async function handleDownloadReceipt(payment, inv) {
+    setDownloadError('')
+    setDownloadingId(`rec-${payment.id}`)
+    try {
+      await generateReceiptPdf(payment, inv, student.full_name)
+    } catch (err) {
+      setDownloadError('Could not create the receipt PDF. Please try again.')
+    }
+    setDownloadingId(null)
   }
 
   const TABS = [
@@ -127,47 +176,99 @@ export default function PortalDashboard({ student }) {
           )}
 
           {tab === 'invoices' && (
-            <div className="card overflow-hidden">
-              {invoices.length === 0 ? (
-                <p className="text-sm text-ink-500 p-5">No invoices yet.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-sand-100 text-ink-500 text-left">
-                    <tr>
-                      <th className="px-5 py-3 font-medium">Invoice</th>
-                      <th className="px-5 py-3 font-medium">Issued</th>
-                      <th className="px-5 py-3 font-medium">Total</th>
-                      <th className="px-5 py-3 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-sand-100">
-                    {invoices.map((inv) => {
-                      const payable = Math.max(Number(inv.amount) - Number(inv.payment_amount || 0), 0)
-                      return (
-                        <tr key={inv.id}>
-                          <td className="px-5 py-3 font-medium text-ink-900">
-                            INV-{String(inv.invoice_no).padStart(5, '0')}
-                          </td>
-                          <td className="px-5 py-3 text-ink-700">{formatDate(inv.issue_date)}</td>
-                          <td className="px-5 py-3 text-ink-700">RM {Number(inv.amount).toFixed(2)}</td>
-                          <td className="px-5 py-3">
-                            {inv.status === 'paid' ? (
-                              <span className="badge-approved">Paid</span>
-                            ) : inv.status === 'partial' ? (
-                              <span className="badge-pending">Partial — RM {payable.toFixed(2)} due</span>
-                            ) : inv.status === 'cancelled' ? (
-                              <span className="badge-cancelled">Cancelled</span>
-                            ) : (
-                              <span className="badge-pending">Unpaid — RM {payable.toFixed(2)} due</span>
-                            )}
-                          </td>
+            <>
+              {downloadError && <p className="text-sm text-rose-700 bg-rose-50 rounded-md px-3 py-2 mb-3">{downloadError}</p>}
+              <div className="card overflow-hidden">
+                {invoices.length === 0 ? (
+                  <p className="text-sm text-ink-500 p-5">No invoices yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead className="bg-sand-100 text-ink-500 text-left">
+                        <tr>
+                          <th className="px-5 py-3 font-medium">Invoice</th>
+                          <th className="px-5 py-3 font-medium">Issued</th>
+                          <th className="px-5 py-3 font-medium">Total</th>
+                          <th className="px-5 py-3 font-medium">Status</th>
+                          {canDownload && <th className="px-5 py-3 font-medium">Documents</th>}
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                      </thead>
+                      <tbody className="divide-y divide-sand-100">
+                        {invoices.map((inv) => {
+                          const payable = Math.max(Number(inv.amount) - Number(inv.payment_amount || 0), 0)
+                          const receipts = paymentsByInvoice[inv.id] || []
+                          const expanded = expandedInvoiceId === inv.id
+                          return (
+                            <Fragment key={inv.id}>
+                              <tr>
+                                <td className="px-5 py-3 font-medium text-ink-900">INV-{String(inv.invoice_no).padStart(5, '0')}</td>
+                                <td className="px-5 py-3 text-ink-700">{formatDate(inv.issue_date)}</td>
+                                <td className="px-5 py-3 text-ink-700">RM {Number(inv.amount).toFixed(2)}</td>
+                                <td className="px-5 py-3">
+                                  {inv.status === 'paid' ? (
+                                    <span className="badge-approved">Paid</span>
+                                  ) : inv.status === 'partial' ? (
+                                    <span className="badge-pending">Partial — RM {payable.toFixed(2)} due</span>
+                                  ) : inv.status === 'cancelled' ? (
+                                    <span className="badge-cancelled">Cancelled</span>
+                                  ) : (
+                                    <span className="badge-pending">Unpaid — RM {payable.toFixed(2)} due</span>
+                                  )}
+                                </td>
+                                {canDownload && (
+                                  <td className="px-5 py-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <button
+                                        onClick={() => handleDownloadInvoice(inv)}
+                                        disabled={downloadingId === `inv-${inv.id}`}
+                                        className="btn-secondary text-xs"
+                                      >
+                                        <Download size={13} /> {downloadingId === `inv-${inv.id}` ? 'Preparing…' : 'Invoice'}
+                                      </button>
+                                      {receipts.length > 0 && (
+                                        <button
+                                          onClick={() => setExpandedInvoiceId(expanded ? null : inv.id)}
+                                          className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+                                        >
+                                          Receipts ({receipts.length}) {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                              {canDownload && expanded && (
+                                <tr className="bg-sand-50">
+                                  <td colSpan={5} className="px-5 py-3">
+                                    <div className="space-y-2">
+                                      {receipts.map((p) => (
+                                        <div key={p.id} className="flex items-center justify-between text-xs">
+                                          <span className="text-ink-700">
+                                            R-{String(p.receipt_no).padStart(5, '0')} · {formatDate(p.payment_date)} · RM{' '}
+                                            {Number(p.amount).toFixed(2)}
+                                          </span>
+                                          <button
+                                            onClick={() => handleDownloadReceipt(p, inv)}
+                                            disabled={downloadingId === `rec-${p.id}`}
+                                            className="btn-secondary text-xs"
+                                          >
+                                            <Download size={12} /> {downloadingId === `rec-${p.id}` ? 'Preparing…' : 'Receipt'}
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {tab === 'schedule' && (

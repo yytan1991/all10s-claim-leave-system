@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, X, Users2, Copy } from 'lucide-react'
+import { Plus, Trash2, X, Users2, Copy, Eye, EyeOff } from 'lucide-react'
 import { supabase, createSignupClient } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
@@ -25,6 +25,7 @@ export default function ParentStudentAccountsPage() {
   const [loading, setLoading] = useState(true)
   const [creatingStudent, setCreatingStudent] = useState(false)
   const [newCredentials, setNewCredentials] = useState(null)
+  const [revealedIds, setRevealedIds] = useState(new Set())
 
   async function load() {
     setLoading(true)
@@ -35,10 +36,7 @@ export default function ParentStudentAccountsPage() {
         .select('*, parent_student_links(students(id, full_name))')
         .eq('org_id', profile.org_id)
         .order('full_name'),
-      supabase
-        .from('student_accounts')
-        .select('*, students(full_name)')
-        .eq('org_id', profile.org_id),
+      supabase.from('student_accounts').select('*, students(full_name)').eq('org_id', profile.org_id),
     ])
     setStudents(studentData || [])
     setParentAccounts(parentAccData || [])
@@ -61,6 +59,15 @@ export default function ParentStudentAccountsPage() {
     if (!confirm('Remove this student login? They will no longer be able to sign in.')) return
     await supabase.from('student_accounts').delete().eq('id', id)
     load()
+  }
+
+  function toggleReveal(id) {
+    setRevealedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const studentsWithoutLogin = students.filter((s) => !studentAccounts.some((sa) => sa.student_id === s.id))
@@ -87,7 +94,8 @@ export default function ParentStudentAccountsPage() {
       {tab === 'parents' && (
         <>
           <Alert tone="amber">
-            Parent accounts are created automatically when you approve a registration under "Registration Approvals". This tab is for viewing and removing accounts only.
+            Parent accounts are created when you approve a registration. Parents set their own password the first time
+            they sign in (and can reset it themselves), so there's nothing to hand out here.
           </Alert>
           <div className="mt-4">
             {loading ? (
@@ -96,32 +104,44 @@ export default function ParentStudentAccountsPage() {
               <EmptyState icon={Users2} title="No parent accounts yet" description="These appear once you approve a registration." />
             ) : (
               <div className="card overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-sand-100 text-ink-500 text-left">
-                    <tr>
-                      <th className="px-5 py-3 font-medium">Name</th>
-                      <th className="px-5 py-3 font-medium">Phone</th>
-                      <th className="px-5 py-3 font-medium">Linked children</th>
-                      <th className="px-5 py-3 font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-sand-100">
-                    {parentAccounts.map((pa) => (
-                      <tr key={pa.id}>
-                        <td className="px-5 py-3 font-medium text-ink-900">{pa.full_name}</td>
-                        <td className="px-5 py-3 text-ink-500">{pa.phone || '—'}</td>
-                        <td className="px-5 py-3 text-ink-700">
-                          {(pa.parent_student_links || []).map((l) => l.students?.full_name).filter(Boolean).join(', ') || '—'}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <button onClick={() => deleteParentAccount(pa.id)} className="text-rose-500 hover:text-rose-600">
-                            <Trash2 size={15} />
-                          </button>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead className="bg-sand-100 text-ink-500 text-left">
+                      <tr>
+                        <th className="px-5 py-3 font-medium">Name</th>
+                        <th className="px-5 py-3 font-medium">Email</th>
+                        <th className="px-5 py-3 font-medium">Phone</th>
+                        <th className="px-5 py-3 font-medium">Linked children</th>
+                        <th className="px-5 py-3 font-medium">Portal login</th>
+                        <th className="px-5 py-3 font-medium" />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-sand-100">
+                      {parentAccounts.map((pa) => (
+                        <tr key={pa.id}>
+                          <td className="px-5 py-3 font-medium text-ink-900">{pa.full_name}</td>
+                          <td className="px-5 py-3 text-ink-700">{pa.email || '—'}</td>
+                          <td className="px-5 py-3 text-ink-500">{pa.phone || '—'}</td>
+                          <td className="px-5 py-3 text-ink-700">
+                            {(pa.parent_student_links || []).map((l) => l.students?.full_name).filter(Boolean).join(', ') || '—'}
+                          </td>
+                          <td className="px-5 py-3">
+                            {pa.user_id ? (
+                              <span className="badge-approved">Activated</span>
+                            ) : (
+                              <span className="badge-pending">Not signed in yet</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <button onClick={() => deleteParentAccount(pa.id)} className="text-rose-500 hover:text-rose-600">
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -139,9 +159,7 @@ export default function ParentStudentAccountsPage() {
               <Plus size={15} /> Create student login
             </button>
           </div>
-          {studentsWithoutLogin.length === 0 && students.length > 0 && (
-            <Alert tone="amber">Every student already has a login.</Alert>
-          )}
+          {studentsWithoutLogin.length === 0 && students.length > 0 && <Alert tone="amber">Every student already has a login.</Alert>}
           {loading ? (
             <p className="text-sm text-ink-500">Loading…</p>
           ) : studentAccounts.length === 0 ? (
@@ -153,6 +171,7 @@ export default function ParentStudentAccountsPage() {
                   <tr>
                     <th className="px-5 py-3 font-medium">Student</th>
                     <th className="px-5 py-3 font-medium">Login Code</th>
+                    <th className="px-5 py-3 font-medium">PIN</th>
                     <th className="px-5 py-3 font-medium" />
                   </tr>
                 </thead>
@@ -161,6 +180,18 @@ export default function ParentStudentAccountsPage() {
                     <tr key={sa.id}>
                       <td className="px-5 py-3 font-medium text-ink-900">{sa.students?.full_name || '—'}</td>
                       <td className="px-5 py-3 text-ink-700 font-mono">{sa.login_code}</td>
+                      <td className="px-5 py-3 text-ink-700 font-mono">
+                        {sa.pin_code ? (
+                          <span className="inline-flex items-center gap-2">
+                            {revealedIds.has(sa.id) ? sa.pin_code : '••••••'}
+                            <button onClick={() => toggleReveal(sa.id)} className="text-ink-400 hover:text-ink-900" title="Show / hide PIN">
+                              {revealedIds.has(sa.id) ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-ink-400 font-sans">Not stored — delete and recreate this login</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-right">
                         <button onClick={() => deleteStudentAccount(sa.id)} className="text-rose-500 hover:text-rose-600">
                           <Trash2 size={15} />
@@ -229,15 +260,27 @@ function CreateStudentModal({ orgId, students, onClose, onCreated }) {
       return
     }
 
-    const { error: insertError } = await supabase
+    const { data: accountRow, error: insertError } = await supabase
       .from('student_accounts')
-      .insert({ user_id: userId, org_id: orgId, student_id: studentId, login_code: loginCode })
-    setSaving(false)
+      .insert({ user_id: userId, org_id: orgId, student_id: studentId, login_code: loginCode, pin_code: pin })
+      .select()
+      .single()
     if (insertError) {
+      setSaving(false)
       setError(insertError.message)
       return
     }
-    onCreated({ studentName: student?.full_name, loginCode, pin })
+
+    // Student logins use an internal address that can't receive email, so activate it directly.
+    const { error: confirmError } = await supabase.rpc('confirm_student_login', { p_student_account_id: accountRow.id })
+    setSaving(false)
+
+    onCreated({
+      studentName: student?.full_name,
+      loginCode,
+      pin,
+      warning: confirmError ? `The login was created but couldn't be activated automatically (${confirmError.message}).` : '',
+    })
   }
 
   return (
@@ -261,7 +304,7 @@ function CreateStudentModal({ orgId, students, onClose, onCreated }) {
               ))}
             </select>
           </div>
-          <p className="text-xs text-ink-500">A Login Code and PIN will be generated automatically — you'll see them once, to give to the student.</p>
+          <p className="text-xs text-ink-500">A Login Code and PIN are generated automatically. You can look the PIN up again later in this list.</p>
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Creating…' : 'Create login'}
@@ -285,8 +328,7 @@ function CredentialsModal({ credentials, onClose }) {
       <div className="card w-full max-w-sm p-6">
         <h3 className="font-semibold text-ink-900 mb-2">Login created</h3>
         <p className="text-sm text-ink-500 mb-4">
-          Give these to <span className="font-medium text-ink-700">{credentials.studentName}</span> to log into the
-          student portal. This won't be shown again — copy it down now.
+          Give these to <span className="font-medium text-ink-700">{credentials.studentName}</span> to log into the student portal.
         </p>
         <div className="bg-sand-50 rounded-md p-4 mb-4 space-y-2">
           <div className="flex justify-between">
@@ -298,6 +340,7 @@ function CredentialsModal({ credentials, onClose }) {
             <span className="text-sm font-mono font-semibold text-ink-900">{credentials.pin}</span>
           </div>
         </div>
+        {credentials.warning && <p className="text-xs text-amber-700 bg-amber-50 rounded-md px-3 py-2 mb-4">{credentials.warning}</p>}
         <div className="flex gap-3">
           <button onClick={copyAll} className="btn-secondary text-sm">
             <Copy size={14} /> Copy both

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, X, Pencil, GripVertical, ArrowUp, ArrowDown, Eye } from 'lucide-react'
+import { Plus, Trash2, X, Pencil, GripVertical, ArrowUp, ArrowDown, Eye, Copy, Check, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
@@ -19,6 +19,7 @@ export default function RegistrationFormBuilderPage() {
   const [fields, setFields] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingField, setEditingField] = useState(null) // null = closed, {} = new, {...} = editing existing
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
   async function load() {
@@ -123,21 +124,50 @@ export default function RegistrationFormBuilderPage() {
     )
   }
 
+  const formLink = `${window.location.origin}/register?org=${profile.org_id}`
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(formLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      // Clipboard can be blocked — the link is also shown in a box below to select manually.
+      setError('Could not copy automatically. Tap the link box and copy it manually.')
+    }
+  }
+
   return (
     <AppLayout title="Registration Form Builder" subtitle="Add, edit, remove, and reorder extra questions on your public registration form.">
-      <div className="flex justify-end mb-4">
-        <a
-          href={`/register?org=${profile.org_id}&preview=1`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary text-sm"
-        >
-          <Eye size={15} /> Preview form
-        </a>
+      <div className="card p-4 mb-4">
+        <p className="text-sm font-medium text-ink-900 mb-1">Your registration form link</p>
+        <p className="text-xs text-ink-500 mb-3">Share this with parents. Each centre has its own link.</p>
+        <input
+          readOnly
+          className="field-input text-xs mb-3"
+          value={formLink}
+          onFocus={(e) => e.target.select()}
+        />
+        <div className="flex flex-wrap gap-2">
+          <button onClick={copyLink} className="btn-primary text-sm">
+            {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied!' : 'Copy link'}
+          </button>
+          <a href={formLink} target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm">
+            <ExternalLink size={15} /> Open live form
+          </a>
+          <a
+            href={`${formLink}&preview=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary text-sm"
+          >
+            <Eye size={15} /> Preview (can't submit)
+          </a>
+        </div>
       </div>
 
       <Alert tone="amber">
-        Parent name, email, phone, password, and the student's name always appear on the form and can't be removed — they're
+        Parent name, email, phone, and the student's name always appear on the form and can't be removed — they're
         needed to create the login. Anything you add below appears as extra questions.
       </Alert>
 

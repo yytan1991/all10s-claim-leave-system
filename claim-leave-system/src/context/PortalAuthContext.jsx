@@ -97,7 +97,13 @@ export function PortalAuthProvider({ children }) {
     loading,
     signIn,
     signOut,
-    refreshAccount: () => loadAccount(session?.user?.id),
+    // Reads the live session rather than the one captured at render time,
+    // so it still works right after a code login or account linking.
+    refreshAccount: async () => {
+      const { data } = await supabase.auth.getSession()
+      setSession(data.session)
+      await loadAccount(data.session?.user?.id)
+    },
   }
 
   return <PortalAuthContext.Provider value={value}>{children}</PortalAuthContext.Provider>

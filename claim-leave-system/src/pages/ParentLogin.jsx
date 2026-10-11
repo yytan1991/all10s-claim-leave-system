@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { usePortalAuth } from '../context/PortalAuthContext'
 
@@ -11,8 +11,10 @@ import { usePortalAuth } from '../context/PortalAuthContext'
 export default function ParentLogin() {
   const { signIn, refreshAccount } = usePortalAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const arrivedFromEmail = searchParams.get('from') === 'email'
 
-  const [mode, setMode] = useState('password')
+  const [mode, setMode] = useState(arrivedFromEmail ? 'linking' : 'password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
@@ -21,6 +23,38 @@ export default function ParentLogin() {
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // The emailed link brings people back here (?from=email) already signed in.
+  // Finish linking their approved registration, then ask them to set a password.
+  useEffect(() => {
+    if (!arrivedFromEmail) return
+    let cancelled = false
+    async function linkFromEmail() {
+      const { data } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (!data.session) {
+        setMode('request-code')
+        setError('That link has expired or was already used. Enter your email to get a new code.')
+        return
+      }
+      const { data: claimedId, error: claimError } = await supabase.rpc('claim_parent_account')
+      if (cancelled) return
+      if (claimError || !claimedId) {
+        setMode('password')
+        setError("We couldn't link this email to an approved registration. Please contact the centre.")
+        return
+      }
+      await refreshAccount()
+      if (cancelled) return
+      setMode('set-password')
+      setInfo('Email verified. Now choose a password for next time.')
+    }
+    linkFromEmail()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrivedFromEmail])
 
   function goToMode(next) {
     setMode(next)
@@ -75,7 +109,7 @@ export default function ParentLogin() {
 
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: em,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, emailRedirectTo: `${window.location.origin}/parent-login?from=email` },
     })
     setLoading(false)
     if (otpError) {
@@ -85,7 +119,7 @@ export default function ParentLogin() {
     setEmail(em)
     setCode('')
     setMode('enter-code')
-    setInfo(`We've emailed a code to ${em}. It can take a minute to arrive — check your spam folder too.`)
+    setInfo(`We've emailed you at ${em}. Type the code below, or click the link in the email. It can take a minute — check your spam folder too.`)
   }
 
   async function handleVerifyCode(e) {
@@ -149,6 +183,7 @@ export default function ParentLogin() {
     'request-code': ['Get a code by email', 'For your first login, or if you forgot your password.'],
     'enter-code': ['Enter your code', 'Type the code we emailed you.'],
     'set-password': ['Choose a password', "You'll use this to sign in from now on."],
+    linking: ['Verifying your email…', 'One moment please.'],
   }
 
   return (
@@ -159,6 +194,8 @@ export default function ParentLogin() {
 
         {error && <div className="mb-4 text-sm text-rose-700 bg-rose-50 rounded-md px-3 py-2">{error}</div>}
         {info && !error && <div className="mb-4 text-sm text-emerald-700 bg-emerald-50 rounded-md px-3 py-2">{info}</div>}
+
+        {mode === 'linking' && <p className="text-sm text-ink-500">Please wait…</p>}
 
         {mode === 'password' && (
           <form onSubmit={handlePasswordLogin} className="space-y-4">

@@ -80,12 +80,24 @@ export function PortalAuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
-    supabase.auth.getSession().then(async ({ data }) => {
+    async function init() {
+      // "Remember me" was unticked at sign-in: that choice only lasts for the browser
+      // session. In a fresh one, sign out on this device only (never other devices).
+      try {
+        if (localStorage.getItem('portal_session_only') === '1' && !sessionStorage.getItem('portal_session_active')) {
+          localStorage.removeItem('portal_session_only')
+          await supabase.auth.signOut({ scope: 'local' })
+        }
+      } catch (err) {
+        // storage blocked: nothing to enforce
+      }
+      const { data } = await supabase.auth.getSession()
       if (!mounted) return
       setSession(data.session)
       await loadAccount(data.session?.user?.id)
       setLoading(false)
-    })
+    }
+    init()
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession)
@@ -99,7 +111,14 @@ export function PortalAuthProvider({ children }) {
   }, [loadAccount])
 
   const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password })
-  const signOut = () => supabase.auth.signOut()
+  const signOut = () => {
+    try {
+      localStorage.removeItem('portal_session_only')
+    } catch (err) {
+      // ignore
+    }
+    return supabase.auth.signOut()
+  }
 
   const value = {
     session,

@@ -15,7 +15,14 @@ export default function ParentLogin() {
   const arrivedFromEmail = searchParams.get('from') === 'email'
 
   const [mode, setMode] = useState(arrivedFromEmail ? 'linking' : 'password')
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem('portal_remembered_email') || ''
+    } catch (err) {
+      return ''
+    }
+  })
+  const [rememberMe, setRememberMe] = useState(true)
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -32,12 +39,39 @@ export default function ParentLogin() {
     return Boolean(data.session?.user?.user_metadata?.portal_password_set)
   }
 
+  // "Remember me" ticked: stay signed in on this device and remember the email.
+  // Unticked: sign out when the browser is closed (see PortalAuthContext) and forget the email.
+  function applyRememberChoice(emailValue) {
+    try {
+      if (rememberMe) {
+        localStorage.setItem('portal_remembered_email', emailValue)
+        localStorage.removeItem('portal_session_only')
+      } else {
+        localStorage.removeItem('portal_remembered_email')
+        localStorage.setItem('portal_session_only', '1')
+        sessionStorage.setItem('portal_session_active', '1')
+      }
+    } catch (err) {
+      // storage blocked: nothing can be remembered on this device
+    }
+  }
+
+  // Signing in by emailed code/link has no tick box, so it behaves as "stay signed in".
+  function clearSessionOnly() {
+    try {
+      localStorage.removeItem('portal_session_only')
+    } catch (err) {
+      // ignore
+    }
+  }
+
   // The emailed link brings people back here (?from=email) already signed in.
   // Finish linking their approved registration, then ask them to set a password.
   useEffect(() => {
     if (!arrivedFromEmail) return
     let cancelled = false
     async function linkFromEmail() {
+      clearSessionOnly()
       const { data } = await supabase.auth.getSession()
       if (cancelled) return
       if (!data.session) {
@@ -86,6 +120,7 @@ export default function ParentLogin() {
       setError('Email or password is incorrect. First time here, or forgot your password? Use “Get a code by email” below.')
       return
     }
+    applyRememberChoice(email.trim().toLowerCase())
     navigate('/parent-portal')
   }
 
@@ -161,6 +196,8 @@ export default function ParentLogin() {
       setError('That code is incorrect or has expired. Check it and try again, or request a new one.')
       return
     }
+
+    clearSessionOnly()
 
     const { data: claimedId, error: claimError } = await supabase.rpc('claim_parent_account')
     if (claimError || !claimedId) {
@@ -244,12 +281,35 @@ export default function ParentLogin() {
           <form onSubmit={handlePasswordLogin} className="space-y-4">
             <div>
               <label className="field-label">Email</label>
-              <input type="email" className="field-input" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <input
+                type="email"
+                name="email"
+                autoComplete="username"
+                className="field-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
             <div>
               <label className="field-label">Password</label>
-              <input type="password" className="field-input" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <input
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                className="field-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
+            <label className="flex items-start gap-2 text-sm text-ink-700 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+              <span>
+                Remember me on this device
+                <span className="block text-xs text-ink-500">Stays signed in and remembers your email. Untick on a shared computer.</span>
+              </span>
+            </label>
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
@@ -298,19 +358,23 @@ export default function ParentLogin() {
 
         {mode === 'set-password' && (
           <form onSubmit={handleSetPassword} className="space-y-4">
+            {email && (
+              <input type="email" name="username" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" className="sr-only" />
+            )}
             <div>
               <label className="field-label">New password</label>
               <input
                 type="password"
                 className="field-input"
                 value={newPassword}
+                autoComplete="new-password"
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="At least 6 characters"
               />
             </div>
             <div>
               <label className="field-label">Confirm password</label>
-              <input type="password" className="field-input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <input type="password" className="field-input" value={confirmPassword} autoComplete="new-password" onChange={(e) => setConfirmPassword(e.target.value)} />
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Saving…' : 'Save password and continue'}

@@ -19,11 +19,22 @@ export function PortalAuthProvider({ children }) {
       return
     }
 
-    const { data: parentRow } = await supabase
+    let { data: parentRow } = await supabase
       .from('parent_accounts')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle()
+
+    // Signed in with a verified email but not linked yet (for example they clicked
+    // the emailed link and landed on another page)? Link them now if they have an
+    // approved registration. Returns nothing for anyone else.
+    if (!parentRow) {
+      const { data: claimedId } = await supabase.rpc('claim_parent_account')
+      if (claimedId) {
+        const { data: claimedRow } = await supabase.from('parent_accounts').select('*').eq('id', claimedId).maybeSingle()
+        parentRow = claimedRow
+      }
+    }
 
     if (parentRow) {
       const { data: links } = await supabase

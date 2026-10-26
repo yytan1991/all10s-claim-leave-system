@@ -23,6 +23,14 @@ export default function ParentLogin() {
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
+  const [hasPassword, setHasPassword] = useState(false)
+
+  // Remembers whether this parent has already chosen a password before, so we can
+  // offer to keep it instead of forcing a new one every time they use a code.
+  async function readHasPassword() {
+    const { data } = await supabase.auth.getSession()
+    return Boolean(data.session?.user?.user_metadata?.portal_password_set)
+  }
 
   // The emailed link brings people back here (?from=email) already signed in.
   // Finish linking their approved registration, then ask them to set a password.
@@ -45,9 +53,15 @@ export default function ParentLogin() {
         return
       }
       await refreshAccount()
+      const already = await readHasPassword()
       if (cancelled) return
+      setHasPassword(already)
       setMode('set-password')
-      setInfo('Email verified. Now choose a password for next time.')
+      setInfo(
+        already
+          ? 'Email verified. Keep your current password, or choose a new one.'
+          : 'Email verified. Now choose a password for next time.'
+      )
     }
     linkFromEmail()
     return () => {
@@ -109,7 +123,11 @@ export default function ParentLogin() {
 
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: em,
-      options: { shouldCreateUser: true, emailRedirectTo: `${window.location.origin}/parent-login?from=email` },
+      options: {
+        shouldCreateUser: true,
+        data: { portal: 'parent' },
+        emailRedirectTo: `${window.location.origin}/parent-login?from=email`,
+      },
     })
     setLoading(false)
     if (otpError) {
@@ -152,9 +170,15 @@ export default function ParentLogin() {
     }
 
     await refreshAccount()
+    const already = await readHasPassword()
     setLoading(false)
+    setHasPassword(already)
     setMode('set-password')
-    setInfo('Email verified. Now choose a password for next time.')
+    setInfo(
+      already
+        ? 'Email verified. Keep your current password, or choose a new one.'
+        : 'Email verified. Now choose a password for next time.'
+    )
   }
 
   async function handleSetPassword(e) {
@@ -169,12 +193,31 @@ export default function ParentLogin() {
       return
     }
     setLoading(true)
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-    setLoading(false)
-    if (updateError) {
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: { portal_password_set: true },
+    })
+
+    // Supabase refuses to "change" a password to the one it already has. For a
+    // parent that just means they typed their existing password again — which is
+    // exactly what they want, so treat it as success.
+    const sameAsBefore =
+      updateError &&
+      (updateError.code === 'same_password' || /different from the old password/i.test(updateError.message || ''))
+
+    if (updateError && !sameAsBefore) {
+      setLoading(false)
       setError(updateError.message)
       return
     }
+    if (sameAsBefore) {
+      await supabase.auth.updateUser({ data: { portal_password_set: true } })
+    }
+    setLoading(false)
+    navigate('/parent-portal')
+  }
+
+  function handleKeepPassword() {
     navigate('/parent-portal')
   }
 
@@ -272,6 +315,14 @@ export default function ParentLogin() {
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Saving…' : 'Save password and continue'}
             </button>
+            {hasPassword && (
+              <button type="button" onClick={handleKeepPassword} className="btn-secondary w-full">
+                Keep my current password
+              </button>
+            )}
+            <p className="text-xs text-ink-500">
+              You can type the same password you used before — it doesn't have to be new.
+            </p>
           </form>
         )}
       </div>

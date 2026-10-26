@@ -68,7 +68,7 @@ function statusBadge(status) {
 }
 
 // canDownload: parents can download invoice / receipt PDFs; the student view is read-only.
-export default function PortalDashboard({ student, canDownload = false }) {
+export default function PortalDashboard({ student, canDownload = false, showInvoices = true }) {
   const [tab, setTab] = useState('announcements')
   const [announcements, setAnnouncements] = useState([])
   const [attendance, setAttendance] = useState([])
@@ -101,7 +101,9 @@ export default function PortalDashboard({ student, canDownload = false }) {
         .eq('student_id', student.id)
         .order('attendance_date', { ascending: false })
         .limit(30),
-      supabase.from('student_invoices').select('*').eq('student_id', student.id).order('issue_date', { ascending: false }),
+      showInvoices
+        ? supabase.from('student_invoices').select('*').eq('student_id', student.id).order('issue_date', { ascending: false })
+        : Promise.resolve({ data: [] }),
       supabase
         .from('class_enrollments')
         .select('classes(id, name, day_of_week, start_time, end_time, room)')
@@ -161,7 +163,7 @@ export default function PortalDashboard({ student, canDownload = false }) {
     { key: 'attendance', label: 'Attendance', icon: ClipboardList },
     { key: 'invoices', label: 'Invoices', icon: Receipt },
     { key: 'schedule', label: 'Class Schedule', icon: CalendarClock },
-  ]
+  ].filter((t) => showInvoices || t.key !== 'invoices')
 
   return (
     <div>

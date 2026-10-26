@@ -32,7 +32,7 @@ export default function StudentPortal() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-8 py-6">
-        <PortalDashboard student={student} showInvoices={false} />
+        <PortalDashboard student={student} showInvoices={false} showLearning />
       </main>
     </div>
   )

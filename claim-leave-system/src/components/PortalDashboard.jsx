@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp } from 'lucide-react'
+import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import MaterialView from './MaterialView'
 import { formatDate } from '../lib/helpers'
 import { generateInvoicePdf } from '../lib/invoicePdf'
 import { generateReceiptPdf } from '../lib/receiptPdf'
@@ -68,13 +69,14 @@ function statusBadge(status) {
 }
 
 // canDownload: parents can download invoice / receipt PDFs; the student view is read-only.
-export default function PortalDashboard({ student, canDownload = false, showInvoices = true }) {
+export default function PortalDashboard({ student, canDownload = false, showInvoices = true, showLearning = false }) {
   const [tab, setTab] = useState('announcements')
   const [announcements, setAnnouncements] = useState([])
   const [attendance, setAttendance] = useState([])
   const [invoices, setInvoices] = useState([])
   const [paymentsByInvoice, setPaymentsByInvoice] = useState({})
   const [classes, setClasses] = useState([])
+  const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [expandedInvoiceId, setExpandedInvoiceId] = useState(null)
   const [downloadingId, setDownloadingId] = useState(null)
@@ -87,7 +89,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
 
   async function load() {
     setLoading(true)
-    const [{ data: ann }, { data: att }, { data: inv }, { data: enroll }] = await Promise.all([
+    const [{ data: ann }, { data: att }, { data: inv }, { data: enroll }, { data: mats }] = await Promise.all([
       supabase
         .from('announcements')
         .select('*')
@@ -108,6 +110,9 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
         .from('class_enrollments')
         .select('classes(id, name, day_of_week, start_time, end_time, room)')
         .eq('student_id', student.id),
+      showLearning
+        ? supabase.from('learning_materials').select('*, classes(name)').order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] }),
     ])
 
     const invoiceList = inv || []
@@ -132,6 +137,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
     setInvoices(invoiceList)
     setPaymentsByInvoice(payMap)
     setClasses((enroll || []).map((e) => e.classes).filter(Boolean))
+    setMaterials(mats || [])
     setLoading(false)
   }
 
@@ -160,10 +166,19 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
 
   const TABS = [
     { key: 'announcements', label: 'Announcements', icon: Megaphone },
+    showLearning && { key: 'learning', label: 'Learning', icon: BookOpen },
     { key: 'attendance', label: 'Attendance', icon: ClipboardList },
     { key: 'invoices', label: 'Invoices', icon: Receipt },
     { key: 'schedule', label: 'Class Schedule', icon: CalendarClock },
-  ].filter((t) => showInvoices || t.key !== 'invoices')
+  ].filter((t) => t && (showInvoices || t.key !== 'invoices'))
+
+  // Learning materials grouped by class
+  const materialsByClass = {}
+  materials.forEach((m) => {
+    const key = m.classes?.name || 'Class'
+    if (!materialsByClass[key]) materialsByClass[key] = []
+    materialsByClass[key].push(m)
+  })
 
   return (
     <div>
@@ -216,6 +231,32 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
                         )}
                       </div>
                     )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {tab === 'learning' && (
+            <div className="space-y-6">
+              {materials.length === 0 ? (
+                <p className="text-sm text-ink-500">Your teachers haven't added any learning materials yet.</p>
+              ) : (
+                Object.entries(materialsByClass).map(([className, items]) => (
+                  <div key={className}>
+                    <h4 className="text-sm font-semibold text-ink-900 mb-2">{className}</h4>
+                    <div className="space-y-3">
+                      {items.map((m) => (
+                        <div key={m.id} className="card p-4">
+                          <p className="font-medium text-ink-900">{m.title}</p>
+                          <p className="text-xs text-ink-500 mb-3">{formatDate(m.created_at?.slice(0, 10))}</p>
+                          {m.material_type !== 'note' && m.description && (
+                            <p className="text-sm text-ink-700 whitespace-pre-wrap mb-3">{m.description}</p>
+                          )}
+                          <MaterialView material={m} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))
               )}

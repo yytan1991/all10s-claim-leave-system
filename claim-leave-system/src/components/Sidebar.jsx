@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Pencil,
+  BookOpen,
   Users,
   Settings,
   Clock,
@@ -48,6 +49,7 @@ const studentMgmtLinks = [
   { to: '/students', label: 'Students', icon: Users2 },
   { to: '/teachers', label: 'Teachers', icon: UserCog },
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
+  { to: '/learning-materials', label: 'Learning Materials', icon: BookOpen },
   { to: '/invoices', label: 'Invoice', icon: Receipt },
   { to: '/recurring-invoice', label: 'Recurring Invoice', icon: CalendarClock },
   { to: '/invoice-settings', label: 'Invoice Setting', icon: Settings },
@@ -58,6 +60,7 @@ const studentMgmtLinks = [
 
 const teacherStudentMgmtLinks = [
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
+  { to: '/learning-materials', label: 'Learning Materials', icon: BookOpen },
 ]
 
 const crmLinks = [

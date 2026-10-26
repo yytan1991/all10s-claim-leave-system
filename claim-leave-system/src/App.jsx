@@ -35,6 +35,7 @@ import RecurringInvoicePage from './pages/RecurringInvoicePage'
 import ParentStudentAccountsPage from './pages/ParentStudentAccountsPage'
 import RegistrationApprovalsPage from './pages/RegistrationApprovalsPage'
 import RegistrationFormBuilderPage from './pages/RegistrationFormBuilderPage'
+import LearningMaterialsPage from './pages/LearningMaterialsPage'
 import PublicRegistration from './pages/PublicRegistration'
 import ParentLogin from './pages/ParentLogin'
 import StudentLogin from './pages/StudentLogin'
@@ -327,6 +328,14 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <RegistrationFormBuilderPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/learning-materials"
+        element={
+          <ProtectedRoute>
+            <LearningMaterialsPage />
           </ProtectedRoute>
         }
       />

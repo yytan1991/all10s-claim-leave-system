@@ -58,7 +58,7 @@ export default function ParentPortal() {
           <h1 className="text-lg font-semibold text-ink-900 mb-6">{selectedStudent.full_name}</h1>
         )}
 
-        <PortalDashboard student={selectedStudent} canDownload />
+        <PortalDashboard student={selectedStudent} canDownload showProgress />
       </main>
     </div>
   )

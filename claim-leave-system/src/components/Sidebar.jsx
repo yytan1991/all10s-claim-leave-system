@@ -50,6 +50,8 @@ const studentMgmtLinks = [
   { to: '/teachers', label: 'Teachers', icon: UserCog },
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
   { to: '/learning-materials', label: 'Learning Materials', icon: BookOpen },
+  { to: '/quizzes', label: 'Practice & Quizzes', icon: ClipboardCheck },
+  { to: '/student-progress', label: 'Student Progress', icon: TrendingUp },
   { to: '/invoices', label: 'Invoice', icon: Receipt },
   { to: '/recurring-invoice', label: 'Recurring Invoice', icon: CalendarClock },
   { to: '/invoice-settings', label: 'Invoice Setting', icon: Settings },
@@ -61,6 +63,8 @@ const studentMgmtLinks = [
 const teacherStudentMgmtLinks = [
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
   { to: '/learning-materials', label: 'Learning Materials', icon: BookOpen },
+  { to: '/quizzes', label: 'Practice & Quizzes', icon: ClipboardCheck },
+  { to: '/student-progress', label: 'Student Progress', icon: TrendingUp },
 ]
 
 const crmLinks = [

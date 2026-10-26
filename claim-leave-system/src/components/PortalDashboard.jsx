@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
+import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp, BookOpen, ClipboardCheck, TrendingUp } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import MaterialView from './MaterialView'
+import StudentPractice from './StudentPractice'
+import ProgressView from './ProgressView'
 import { formatDate } from '../lib/helpers'
 import { generateInvoicePdf } from '../lib/invoicePdf'
 import { generateReceiptPdf } from '../lib/receiptPdf'
@@ -69,7 +71,7 @@ function statusBadge(status) {
 }
 
 // canDownload: parents can download invoice / receipt PDFs; the student view is read-only.
-export default function PortalDashboard({ student, canDownload = false, showInvoices = true, showLearning = false }) {
+export default function PortalDashboard({ student, canDownload = false, showInvoices = true, showLearning = false, showPractice = false, showProgress = false }) {
   const [tab, setTab] = useState('announcements')
   const [announcements, setAnnouncements] = useState([])
   const [attendance, setAttendance] = useState([])
@@ -166,7 +168,9 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
 
   const TABS = [
     { key: 'announcements', label: 'Announcements', icon: Megaphone },
+    showProgress && { key: 'progress', label: 'Progress', icon: TrendingUp },
     showLearning && { key: 'learning', label: 'Learning', icon: BookOpen },
+    showPractice && { key: 'practice', label: 'Practice & Quizzes', icon: ClipboardCheck },
     { key: 'attendance', label: 'Attendance', icon: ClipboardList },
     { key: 'invoices', label: 'Invoices', icon: Receipt },
     { key: 'schedule', label: 'Class Schedule', icon: CalendarClock },
@@ -262,6 +266,10 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
               )}
             </div>
           )}
+
+          {tab === 'progress' && <ProgressView studentId={student.id} />}
+
+          {tab === 'practice' && <StudentPractice />}
 
           {tab === 'attendance' && (
             <div className="card overflow-hidden">

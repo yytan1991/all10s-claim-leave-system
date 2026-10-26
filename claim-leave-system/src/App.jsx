@@ -36,6 +36,8 @@ import ParentStudentAccountsPage from './pages/ParentStudentAccountsPage'
 import RegistrationApprovalsPage from './pages/RegistrationApprovalsPage'
 import RegistrationFormBuilderPage from './pages/RegistrationFormBuilderPage'
 import LearningMaterialsPage from './pages/LearningMaterialsPage'
+import QuizzesPage from './pages/QuizzesPage'
+import StudentProgressPage from './pages/StudentProgressPage'
 import PublicRegistration from './pages/PublicRegistration'
 import ParentLogin from './pages/ParentLogin'
 import StudentLogin from './pages/StudentLogin'
@@ -336,6 +338,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <LearningMaterialsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/quizzes"
+        element={
+          <ProtectedRoute>
+            <QuizzesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student-progress"
+        element={
+          <ProtectedRoute>
+            <StudentProgressPage />
           </ProtectedRoute>
         }
       />

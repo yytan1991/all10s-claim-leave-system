@@ -15,6 +15,51 @@ function formatTimeLabel(t) {
   return `${hour12}:${String(m).padStart(2, '0')} ${period}`
 }
 
+// Announcement text is rich HTML written by staff but shown to parents, so keep only
+// plain formatting tags and drop scripts, event handlers and unsafe links.
+const ALLOWED_TAGS = new Set([
+  'B', 'STRONG', 'I', 'EM', 'U', 'S', 'P', 'BR', 'UL', 'OL', 'LI', 'A', 'H1', 'H2', 'H3', 'H4',
+  'BLOCKQUOTE', 'SPAN', 'DIV', 'IMG', 'CODE', 'PRE', 'HR',
+])
+const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'FORM', 'INPUT', 'BUTTON', 'TEXTAREA', 'SELECT', 'SVG', 'MATH'])
+
+function cleanHtml(html) {
+  if (!html) return ''
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const walk = (node) => {
+    Array.from(node.childNodes).forEach((child) => {
+      if (child.nodeType === 3) return
+      if (child.nodeType !== 1) {
+        child.remove()
+        return
+      }
+      if (DROP_TAGS.has(child.tagName)) {
+        child.remove()
+        return
+      }
+      if (!ALLOWED_TAGS.has(child.tagName)) {
+        walk(child)
+        child.replaceWith(...Array.from(child.childNodes))
+        return
+      }
+      Array.from(child.attributes).forEach((attr) => {
+        const val = attr.value.trim().toLowerCase()
+        const okHref = child.tagName === 'A' && attr.name === 'href' && /^(https?:|mailto:|tel:|\/|#)/.test(val)
+        const okSrc = child.tagName === 'IMG' && attr.name === 'src' && /^(https?:|data:image\/)/.test(val)
+        const okAlt = child.tagName === 'IMG' && attr.name === 'alt'
+        if (!okHref && !okSrc && !okAlt) child.removeAttribute(attr.name)
+      })
+      if (child.tagName === 'A') {
+        child.setAttribute('target', '_blank')
+        child.setAttribute('rel', 'noreferrer noopener')
+      }
+      walk(child)
+    })
+  }
+  walk(doc.body)
+  return doc.body.innerHTML
+}
+
 function statusBadge(status) {
   if (status === 'present') return <span className="badge-approved">Present</span>
   if (status === 'absent') return <span className="badge-cancelled">Absent</span>
@@ -43,7 +88,13 @@ export default function PortalDashboard({ student, canDownload = false }) {
   async function load() {
     setLoading(true)
     const [{ data: ann }, { data: att }, { data: inv }, { data: enroll }] = await Promise.all([
-      supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(15),
+      supabase
+        .from('announcements')
+        .select('*')
+        .contains('target_groups', ['students'])
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(15),
       supabase
         .from('student_attendance')
         .select('*, classes(name)')
@@ -139,9 +190,30 @@ export default function PortalDashboard({ student, canDownload = false }) {
               ) : (
                 announcements.map((a) => (
                   <div key={a.id} className="card p-4">
-                    {a.pinned && <span className="badge-pending mb-2 inline-block">Pinned</span>}
-                    <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: a.content }} />
-                    <p className="text-xs text-ink-500 mt-2">{formatDate(a.created_at?.slice(0, 10))}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="font-medium text-ink-900">{a.title}</h4>
+                      {a.pinned && <span className="badge-pending shrink-0">Pinned</span>}
+                    </div>
+                    <p className="text-xs text-ink-500 mt-0.5 mb-3">{formatDate(a.created_at?.slice(0, 10))}</p>
+                    {a.body_html && (
+                      <div
+                        className="max-w-none text-sm text-ink-700 [&_a]:text-brand-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                        dangerouslySetInnerHTML={{ __html: cleanHtml(a.body_html) }}
+                      />
+                    )}
+                    {Array.isArray(a.media) && a.media.length > 0 && (
+                      <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {a.media.map((m, i) =>
+                          m.type === 'video' ? (
+                            <video key={i} src={m.url} controls className="rounded-md w-full aspect-video bg-black" />
+                          ) : (
+                            <a key={i} href={m.url} target="_blank" rel="noreferrer">
+                              <img src={m.url} alt={m.name || ''} className="rounded-md w-full aspect-video object-cover" />
+                            </a>
+                          )
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               )}

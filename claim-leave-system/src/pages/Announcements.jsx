@@ -9,8 +9,15 @@ import { formatDate, initials } from '../lib/helpers'
 
 const AUDIENCE_OPTIONS = [
   { value: 'staff', label: 'Staff' },
-  { value: 'students', label: 'Students (coming soon)' },
+  { value: 'students', label: 'Students & parents' },
 ]
+
+function audienceText(a) {
+  const groups = a.target_groups || []
+  return AUDIENCE_OPTIONS.filter((o) => groups.includes(o.value))
+    .map((o) => o.label)
+    .join(' · ') || 'No audience'
+}
 
 export default function Announcements() {
   const { profile, isManager } = useAuth()
@@ -27,13 +34,11 @@ export default function Announcements() {
 
   async function load() {
     setLoading(true)
-    // Only "staff" is a real audience today — students/parents will filter
-    // in automatically once that portal exists, using the same field.
-    const { data } = await supabase
-      .from('announcements')
-      .select('*')
-      .eq('org_id', profile.org_id)
-      .contains('target_groups', ['staff'])
+    // Managers see every announcement (so they can manage ones meant only for
+    // students & parents). Everyone else sees only what's meant for staff.
+    let query = supabase.from('announcements').select('*').eq('org_id', profile.org_id)
+    if (!isManager) query = query.contains('target_groups', ['staff'])
+    const { data } = await query
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
     setAnnouncements(data || [])
@@ -59,8 +64,19 @@ export default function Announcements() {
     load()
   }
 
+  async function changeAudience(a, value) {
+    const groups = a.target_groups || []
+    const next = groups.includes(value) ? groups.filter((g) => g !== value) : [...groups, value]
+    if (next.length === 0) {
+      alert('An announcement needs at least one audience.')
+      return
+    }
+    await supabase.from('announcements').update({ target_groups: next }).eq('id', a.id)
+    load()
+  }
+
   return (
-    <AppLayout title="Announcements" subtitle="Updates and notices for the whole team.">
+    <AppLayout title="Announcements" subtitle="Updates and notices for your team, students and parents.">
       {isManager && (
         <div className="mb-6">
           {!composing ? (
@@ -107,6 +123,7 @@ export default function Announcements() {
                   {a.pinned && <Pin size={13} className="text-amber-500 shrink-0" fill="currentColor" />}
                   <span className="flex-1 min-w-0">
                     <span className="font-medium text-ink-900 truncate block">{a.title}</span>
+                    {isManager && <span className="text-[11px] text-ink-500 block">For: {audienceText(a)}</span>}
                   </span>
                   <span className="text-xs text-ink-500 shrink-0 hidden sm:inline">
                     {authors[a.created_by] || 'Unknown'} · {formatDate(a.created_at?.slice(0, 10))}
@@ -140,6 +157,22 @@ export default function Announcements() {
                         >
                           <Trash2 size={13} /> Delete
                         </button>
+                      </div>
+                    )}
+
+                    {isManager && (
+                      <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-ink-700">
+                        <span className="text-ink-500">Visible to:</span>
+                        {AUDIENCE_OPTIONS.map((o) => (
+                          <label key={o.value} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(a.target_groups || []).includes(o.value)}
+                              onChange={() => changeAudience(a, o.value)}
+                            />
+                            {o.label}
+                          </label>
+                        ))}
                       </div>
                     )}
 

@@ -365,16 +365,17 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
-      <div className="card w-full max-w-md p-6 max-h-[85vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-ink-900">Edit lesson</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+      <div className="card w-full max-w-5xl p-8 max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-ink-900">Edit lesson</h3>
           <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSaveDetails} className="space-y-4 mb-6 pb-6 border-b border-sand-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <form onSubmit={handleSaveDetails} className="space-y-4">
           {detailsError && <Alert tone="rose">{detailsError}</Alert>}
           {detailsSaved && <Alert tone="brand">Lesson details saved.</Alert>}
           <div>
@@ -428,6 +429,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
           </button>
         </form>
 
+        <div>
         <div className="flex gap-2 border-b border-sand-200 mb-4">
           {[
             { key: 'students', label: 'Students', icon: Users2 },
@@ -456,6 +458,8 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
           onSaved={onSaved}
           onClose={onClose}
         />
+        </div>
+        </div>
       </div>
     </div>
   )
@@ -600,7 +604,7 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
             onChange={(e) => setSearch(e.target.value)}
           />
           {checked.size > 0 && <p className="text-xs text-ink-500 mb-2">{checked.size} selected</p>}
-          <div className="space-y-1 max-h-72 overflow-y-auto border border-sand-200 rounded-md p-2">
+          <div className="space-y-1 max-h-[26rem] overflow-y-auto border border-sand-200 rounded-md p-2">
             {allMembers
               .filter((m) => m.full_name?.toLowerCase().includes(search.trim().toLowerCase()))
               .map((m) => {

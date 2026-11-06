@@ -578,7 +578,7 @@ function BulkEditMonthModal({ count, onClose, onSaved }) {
   )
 }
 
-function QuickPayModal({ invoice, students, paymentMethods, onClose, onSaved }) {
+export function QuickPayModal({ invoice, students, paymentMethods, onClose, onSaved }) {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [payType, setPayType] = useState('full') // 'full' | 'partial'

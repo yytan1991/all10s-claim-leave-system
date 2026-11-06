@@ -98,6 +98,16 @@ export default function RegistrationApprovalsPage() {
       parentIsNew = true
     }
 
+    // Date of birth: taken from a date question whose label mentions birth / DOB, if the form has one
+    let dob = request.student_dob || null
+    for (const [fieldId, value] of Object.entries(request.custom_answers || {})) {
+      const info = fieldLabels[fieldId]
+      if (value && info?.fieldType === 'date' && /birth|dob|出生|生日/i.test(info.label || '')) {
+        dob = value
+        break
+      }
+    }
+
     // 2. Student record
     const { data: studentRow, error: studentError } = await supabase
       .from('students')
@@ -106,6 +116,8 @@ export default function RegistrationApprovalsPage() {
         full_name: request.student_full_name,
         parent_name: request.parent_full_name,
         parent_contact: request.parent_phone,
+        parent_email: parentEmail,
+        date_of_birth: dob,
         created_by: profile.id,
       })
       .select()

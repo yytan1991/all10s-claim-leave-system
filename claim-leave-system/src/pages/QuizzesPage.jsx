@@ -74,14 +74,14 @@ export default function QuizzesPage() {
       ) : classes.length === 0 ? (
         <EmptyState
           icon={ClipboardCheck}
-          title="No classes available"
-          description={isAdmin ? 'Create a class first, under Student Management.' : "You're not assigned to teach any classes yet."}
+          title="No lessons available"
+          description={isAdmin ? 'Create a lesson first, under Student Management.' : "You're not assigned to teach any lessons yet."}
         />
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-4 mb-5">
             <div className="w-full sm:w-72">
-              <label className="field-label">Class</label>
+              <label className="field-label">Lesson</label>
               <select className="field-input" value={classId} onChange={(e) => setClassId(e.target.value)}>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -104,7 +104,7 @@ export default function QuizzesPage() {
           {listLoading ? (
             <p className="text-sm text-ink-500">Loading…</p>
           ) : quizzes.length === 0 ? (
-            <EmptyState icon={ClipboardCheck} title="Nothing here yet" description="Create a practice or quiz for this class." />
+            <EmptyState icon={ClipboardCheck} title="Nothing here yet" description="Create a practice or quiz for this lesson." />
           ) : (
             <div className="space-y-3">
               {quizzes.map((q) => (

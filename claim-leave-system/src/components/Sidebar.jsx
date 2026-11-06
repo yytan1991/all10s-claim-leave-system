@@ -45,7 +45,7 @@ const staffLinks = [
 
 const studentMgmtLinks = [
   { to: '/student-dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/classes', label: 'Classes', icon: School },
+  { to: '/classes', label: 'Lessons', icon: School },
   { to: '/students', label: 'Students', icon: Users2 },
   { to: '/teachers', label: 'Teachers', icon: UserCog },
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },

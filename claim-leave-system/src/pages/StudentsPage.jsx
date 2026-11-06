@@ -472,9 +472,9 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
         <div>
           <label className="field-label">Enrolled lessons</label>
           <div className="rounded-md bg-sand-50 px-3 py-2 text-sm text-ink-700">
-            {lessons.length ? lessons.join(', ') : 'Not enrolled in any class'}
+            {lessons.length ? lessons.join(', ') : 'Not enrolled in any lesson'}
           </div>
-          <p className="text-xs text-ink-500 mt-1">To change classes, use Classes → Edit → Students.</p>
+          <p className="text-xs text-ink-500 mt-1">To change lessons, use Lessons → Edit → Students.</p>
         </div>
         <div>
           <label className="field-label">Parent name</label>
@@ -716,7 +716,7 @@ function AttendanceCalendarModal({ student, onClose }) {
               return (
                 <div
                   key={iso}
-                  title={list ? list.map((r) => `${r.classes?.name || 'Class'}: ${r.status}`).join('\n') : ''}
+                  title={list ? list.map((r) => `${r.classes?.name || 'Lesson'}: ${r.status}`).join('\n') : ''}
                   className={`h-10 rounded-md flex items-center justify-center text-xs font-medium ${style}`}
                 >
                   {date.getDate()}
@@ -738,7 +738,7 @@ function AttendanceCalendarModal({ student, onClose }) {
           <span className="h-3 w-3 rounded bg-rose-100 border border-rose-300" /> Absent ({totals.absent})
         </span>
       </div>
-      <p className="text-xs text-ink-500 mt-2">Days with no colour have no attendance recorded. Hover a day to see the class.</p>
+      <p className="text-xs text-ink-500 mt-2">Days with no colour have no attendance recorded. Hover a day to see the lesson.</p>
     </Modal>
   )
 }

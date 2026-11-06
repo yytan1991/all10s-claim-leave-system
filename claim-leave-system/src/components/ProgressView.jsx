@@ -110,7 +110,7 @@ export default function ProgressView({ studentId, orgId, authorId, authorName, d
   // Group quiz scores and attendance by class
   const byClass = {}
   const ensure = (id, name) => {
-    if (!byClass[id]) byClass[id] = { name: name || 'Class', points: [], present: 0, late: 0, absent: 0 }
+    if (!byClass[id]) byClass[id] = { name: name || 'Lesson', points: [], present: 0, late: 0, absent: 0 }
     return byClass[id]
   }
   attempts.forEach((a) => {
@@ -153,7 +153,7 @@ export default function ProgressView({ studentId, orgId, authorId, authorName, d
             <table className="w-full min-w-[520px] text-sm">
               <thead className="bg-sand-100 text-ink-500 text-left">
                 <tr>
-                  <th className="px-5 py-3 font-medium">Class</th>
+                  <th className="px-5 py-3 font-medium">Lesson</th>
                   <th className="px-5 py-3 font-medium">Attendance</th>
                   <th className="px-5 py-3 font-medium">Quiz average</th>
                   <th className="px-5 py-3 font-medium">Latest quiz</th>
@@ -164,7 +164,7 @@ export default function ProgressView({ studentId, orgId, authorId, authorName, d
                   <tr key={c.id}>
                     <td className="px-5 py-3 font-medium text-ink-900">{c.name}</td>
                     <td className="px-5 py-3 text-ink-700">
-                      {c.marked > 0 ? `${c.attended} of ${c.marked} classes (${Math.round((c.attended / c.marked) * 100)}%)` : '—'}
+                      {c.marked > 0 ? `${c.attended} of ${c.marked} lessons (${Math.round((c.attended / c.marked) * 100)}%)` : '—'}
                     </td>
                     <td className="px-5 py-3 text-ink-700">{c.avg !== null ? `${c.avg}%` : '—'}</td>
                     <td className="px-5 py-3 text-ink-700">{c.latest ? `${c.latest.score}/${c.latest.total}` : '—'}</td>

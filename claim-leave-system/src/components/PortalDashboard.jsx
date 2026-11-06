@@ -173,13 +173,13 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
     showPractice && { key: 'practice', label: 'Practice & Quizzes', icon: ClipboardCheck },
     { key: 'attendance', label: 'Attendance', icon: ClipboardList },
     { key: 'invoices', label: 'Invoices', icon: Receipt },
-    { key: 'schedule', label: 'Class Schedule', icon: CalendarClock },
+    { key: 'schedule', label: 'Lesson Schedule', icon: CalendarClock },
   ].filter((t) => t && (showInvoices || t.key !== 'invoices'))
 
   // Learning materials grouped by class
   const materialsByClass = {}
   materials.forEach((m) => {
-    const key = m.classes?.name || 'Class'
+    const key = m.classes?.name || 'Lesson'
     if (!materialsByClass[key]) materialsByClass[key] = []
     materialsByClass[key].push(m)
   })
@@ -280,7 +280,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
                   <thead className="bg-sand-100 text-ink-500 text-left">
                     <tr>
                       <th className="px-5 py-3 font-medium">Date</th>
-                      <th className="px-5 py-3 font-medium">Class</th>
+                      <th className="px-5 py-3 font-medium">Lesson</th>
                       <th className="px-5 py-3 font-medium">Status</th>
                     </tr>
                   </thead>
@@ -397,12 +397,12 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
           {tab === 'schedule' && (
             <div className="card overflow-hidden">
               {classes.length === 0 ? (
-                <p className="text-sm text-ink-500 p-5">Not enrolled in any classes yet.</p>
+                <p className="text-sm text-ink-500 p-5">Not enrolled in any lessons yet.</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-sand-100 text-ink-500 text-left">
                     <tr>
-                      <th className="px-5 py-3 font-medium">Class</th>
+                      <th className="px-5 py-3 font-medium">Lesson</th>
                       <th className="px-5 py-3 font-medium">Day &amp; time</th>
                       <th className="px-5 py-3 font-medium">Room</th>
                     </tr>

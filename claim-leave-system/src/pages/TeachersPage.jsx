@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { UserCog, X, MoreVertical, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
-import { MembersChecklist } from './ClassesPage'
 import {
   DAY_NAMES,
   formatTimeLabel,
@@ -20,6 +20,7 @@ import {
 
 export default function TeachersPage() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const [staff, setStaff] = useState([])
   const [lessons, setLessons] = useState({}) // teacherId -> [{ id, name }]
   const [loading, setLoading] = useState(true)
@@ -29,7 +30,6 @@ export default function TeachersPage() {
   const [error, setError] = useState('')
 
   const [editFor, setEditFor] = useState(null)
-  const [scheduleFor, setScheduleFor] = useState(null)
   const [attendanceFor, setAttendanceFor] = useState(null)
 
   async function load() {
@@ -99,7 +99,7 @@ export default function TeachersPage() {
   function menuItems(t) {
     const base = [
       { label: 'Edit details', onClick: () => setEditFor(t) },
-      { label: 'View schedule', onClick: () => setScheduleFor(t) },
+      { label: 'View schedule', onClick: () => navigate(`/classes?teacher=${t.id}`) },
       { label: 'View attendance', onClick: () => setAttendanceFor(t) },
     ]
     if (t.archived_at) return [...base, { label: 'Restore teacher', onClick: () => restoreTeacher(t), tone: 'brand' }]
@@ -193,16 +193,6 @@ export default function TeachersPage() {
             setEditFor(null)
             load()
           }}
-        />
-      )}
-      {scheduleFor && (
-        <ScheduleModal
-          teacher={scheduleFor}
-          classIds={(lessons[scheduleFor.id] || []).map((c) => c.id)}
-          orgId={profile.org_id}
-          adminId={profile.id}
-          onChanged={load}
-          onClose={() => setScheduleFor(null)}
         />
       )}
       {attendanceFor && <TeacherAttendanceModal teacher={attendanceFor} onClose={() => setAttendanceFor(null)} />}
@@ -375,7 +365,7 @@ function EditTeacherModal({ teacher, orgId, adminId, assignedIds, onClose, onSav
             {loadingClasses ? (
               <p className="px-3 py-3 text-sm text-ink-500">Loading…</p>
             ) : classes.length === 0 ? (
-              <p className="px-3 py-3 text-sm text-ink-500">No classes yet. Create them on the Classes page.</p>
+              <p className="px-3 py-3 text-sm text-ink-500">No lessons yet. Create them on the Lessons page.</p>
             ) : (
               classes.map((c) => (
                 <label key={c.id} className="flex items-center gap-3 px-3 py-2 hover:bg-sand-50 cursor-pointer">
@@ -391,7 +381,7 @@ function EditTeacherModal({ teacher, orgId, adminId, assignedIds, onClose, onSav
               ))
             )}
           </div>
-          <p className="text-xs text-ink-500 mt-1">A class can have more than one teacher.</p>
+          <p className="text-xs text-ink-500 mt-1">A lesson can have more than one teacher.</p>
         </div>
 
         <div className="flex gap-3 pt-2">
@@ -403,162 +393,6 @@ function EditTeacherModal({ teacher, orgId, adminId, assignedIds, onClose, onSav
           </button>
         </div>
       </form>
-    </Modal>
-  )
-}
-
-function minutesOf(t) {
-  if (!t) return 0
-  const [h, m] = String(t).split(':').map(Number)
-  return h * 60 + (m || 0)
-}
-
-function ScheduleModal({ teacher, classIds, orgId, adminId, onChanged, onClose }) {
-  const [classes, setClasses] = useState([])
-  const [counts, setCounts] = useState({})
-  const [loading, setLoading] = useState(classIds.length > 0)
-  const [openLesson, setOpenLesson] = useState(null)
-
-  async function loadCounts() {
-    if (classIds.length === 0) return
-    const { data } = await supabase.from('class_enrollments').select('class_id').in('class_id', classIds)
-    const map = {}
-    ;(data || []).forEach((e) => {
-      map[e.class_id] = (map[e.class_id] || 0) + 1
-    })
-    setCounts(map)
-  }
-
-  useEffect(() => {
-    if (classIds.length === 0) return
-    supabase
-      .from('classes')
-      .select('*')
-      .in('id', classIds)
-      .order('day_of_week')
-      .order('start_time')
-      .then(({ data }) => {
-        setClasses(data || [])
-        setLoading(false)
-      })
-    loadCounts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const byDay = {}
-  classes.forEach((c) => {
-    if (!byDay[c.day_of_week]) byDay[c.day_of_week] = []
-    byDay[c.day_of_week].push(c)
-  })
-  const totalMinutes = classes.reduce((s, c) => s + Math.max(minutesOf(c.end_time) - minutesOf(c.start_time), 0), 0)
-
-  return (
-    <>
-      <Modal title={`Schedule — ${teacher.full_name}`} onClose={onClose}>
-        {loading ? (
-          <p className="text-sm text-ink-500">Loading…</p>
-        ) : classes.length === 0 ? (
-          <p className="text-sm text-ink-500">No lessons assigned. Use Edit details to assign classes.</p>
-        ) : (
-          <>
-            <p className="text-sm text-ink-700 mb-1">
-              {classes.length} lesson{classes.length === 1 ? '' : 's'} a week · about {(totalMinutes / 60).toFixed(1)} teaching hours
-            </p>
-            <p className="text-xs text-ink-500 mb-4">Click a lesson to see its details and edit its students.</p>
-            <div className="space-y-4">
-              {Object.keys(byDay)
-                .map(Number)
-                .sort((a, b) => a - b)
-                .map((day) => (
-                  <div key={day}>
-                    <p className="text-xs font-semibold text-ink-500 uppercase mb-1.5">{DAY_NAMES[day]}</p>
-                    <div className="space-y-2">
-                      {byDay[day].map((c) => (
-                        <div key={c.id} className="rounded-md border border-sand-200 px-4 py-3 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <button onClick={() => setOpenLesson(c)} className="text-sm font-medium text-brand-700 hover:underline text-left">
-                              {c.name}
-                            </button>
-                            <p className="text-xs text-ink-500">
-                              {counts[c.id] || 0} student{(counts[c.id] || 0) === 1 ? '' : 's'}
-                              {c.room ? ` · ${c.room}` : ''}
-                            </p>
-                          </div>
-                          <p className="text-sm text-ink-700 shrink-0">
-                            {formatTimeLabel(c.start_time)} – {formatTimeLabel(c.end_time)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </>
-        )}
-      </Modal>
-
-      {openLesson && (
-        <LessonModal
-          lesson={openLesson}
-          orgId={orgId}
-          adminId={adminId}
-          onChanged={() => {
-            loadCounts()
-            onChanged()
-          }}
-          onClose={() => setOpenLesson(null)}
-        />
-      )}
-    </>
-  )
-}
-
-// One lesson: its details (read-only) and its student list (editable — the same editor as Classes → Edit → Students).
-function LessonModal({ lesson, orgId, adminId, onChanged, onClose }) {
-  const [teacherNames, setTeacherNames] = useState([])
-  const [studentCount, setStudentCount] = useState(null)
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from('class_teachers').select('profiles!class_teachers_teacher_id_fkey(full_name)').eq('class_id', lesson.id),
-      supabase.from('class_enrollments').select('*', { count: 'exact', head: true }).eq('class_id', lesson.id),
-    ]).then(([{ data: t }, { count }]) => {
-      setTeacherNames((t || []).map((x) => x.profiles?.full_name).filter(Boolean))
-      setStudentCount(count ?? 0)
-    })
-  }, [lesson.id])
-
-  const detail = (label, value) => (
-    <div>
-      <p className="text-xs text-ink-500">{label}</p>
-      <p className="text-sm text-ink-900">{value}</p>
-    </div>
-  )
-
-  return (
-    <Modal title={lesson.name} onClose={onClose} wide>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-md bg-sand-50 p-4 mb-5">
-        {detail('Day', DAY_NAMES[lesson.day_of_week])}
-        {detail('Time', `${formatTimeLabel(lesson.start_time)} – ${formatTimeLabel(lesson.end_time)}`)}
-        {detail('Room', lesson.room || '—')}
-        {detail('Fee', lesson.fee_amount != null ? `RM ${Number(lesson.fee_amount).toFixed(2)}` : '—')}
-        {detail('Teachers', teacherNames.length ? teacherNames.join(', ') : '—')}
-        {detail('Students enrolled', studentCount === null ? '…' : studentCount)}
-      </div>
-
-      <h4 className="text-sm font-semibold text-ink-900 mb-2">Students — tick to enrol, untick to remove</h4>
-      <MembersChecklist
-        orgId={orgId}
-        createdBy={adminId}
-        classItem={lesson}
-        mode="students"
-        onSaved={() => {
-          onChanged()
-          onClose()
-        }}
-        onClose={onClose}
-      />
-      <p className="text-xs text-ink-500 mt-3">To change the lesson's day, time, room or fee, use Classes → Edit.</p>
     </Modal>
   )
 }

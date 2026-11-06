@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, X, Users2, CalendarClock, UserCog, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -26,6 +27,10 @@ export default function ClassesPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [editingClass, setEditingClass] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const teacherFilter = searchParams.get('teacher') // set when you arrive from Teachers → View schedule
+  const [teacherLinks, setTeacherLinks] = useState([])
+  const [filterTeacherName, setFilterTeacherName] = useState('')
 
   async function load() {
     setLoading(true)
@@ -39,7 +44,7 @@ export default function ClassesPage() {
       supabase.from('class_enrollments').select('class_id').eq('org_id', profile.org_id),
       supabase
         .from('class_teachers')
-        .select('class_id, profiles!class_teachers_teacher_id_fkey(full_name)')
+        .select('class_id, teacher_id, profiles!class_teachers_teacher_id_fkey(full_name)')
         .eq('org_id', profile.org_id),
     ])
     setClasses(classData || [])
@@ -56,6 +61,7 @@ export default function ClassesPage() {
       tNames[t.class_id].push(t.profiles?.full_name)
     })
     setTeacherNames(tNames)
+    setTeacherLinks(teacherLinkData || [])
 
     setLoading(false)
   }
@@ -65,31 +71,62 @@ export default function ClassesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.org_id])
 
+  useEffect(() => {
+    if (!teacherFilter) {
+      setFilterTeacherName('')
+      return
+    }
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', teacherFilter)
+      .maybeSingle()
+      .then(({ data }) => setFilterTeacherName(data?.full_name || ''))
+  }, [teacherFilter])
+
+  const shownClasses = teacherFilter
+    ? classes.filter((c) => teacherLinks.some((l) => l.class_id === c.id && l.teacher_id === teacherFilter))
+    : classes
+
   async function deleteClass(id) {
-    if (!confirm('Delete this class? This also removes all its student and teacher assignments.')) return
+    if (!confirm('Delete this lesson? This also removes all its student and teacher assignments.')) return
     await supabase.from('classes').delete().eq('id', id)
     load()
   }
 
   return (
-    <AppLayout title="Classes" subtitle="Weekly class schedule, fees, and teacher/student assignment.">
+    <AppLayout title="Lessons" subtitle="Weekly lesson schedule, fees, and teacher/student assignment.">
+      {teacherFilter && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-sand-100 px-4 py-2.5 text-sm text-ink-700">
+          <span>
+            Showing the schedule of <strong>{filterTeacherName || 'this teacher'}</strong>
+          </span>
+          <button onClick={() => setSearchParams({})} className="text-brand-600 hover:underline text-xs font-medium shrink-0">
+            Show all lessons
+          </button>
+        </div>
+      )}
       <div className="flex justify-end mb-4">
         <button onClick={() => setCreating(true)} className="btn-primary text-sm">
-          <Plus size={15} /> New class
+          <Plus size={15} /> New lesson
         </button>
       </div>
 
       {loading ? (
         <p className="text-sm text-ink-500">Loading…</p>
-      ) : classes.length === 0 ? (
-        <EmptyState icon={CalendarClock} title="No classes yet" description="Create your first class above." />
+      ) : shownClasses.length === 0 ? (
+        <EmptyState
+          icon={CalendarClock}
+          title={teacherFilter ? 'No lessons assigned to this teacher' : 'No lessons yet'}
+          description={teacherFilter ? 'Assign lessons under Teachers → Edit details, or from a lesson\'s Edit → Teachers tab.' : 'Create your first lesson above.'}
+        />
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-sand-100 text-ink-500 text-left">
                 <tr>
-                  <th className="px-5 py-3 font-medium">Class</th>
+                  <th className="px-5 py-3 font-medium">Lesson</th>
                   <th className="px-5 py-3 font-medium">Day &amp; time</th>
                   <th className="px-5 py-3 font-medium">Teachers</th>
                   <th className="px-5 py-3 font-medium">Room</th>
@@ -99,7 +136,7 @@ export default function ClassesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand-100">
-                {classes.map((c) => (
+                {shownClasses.map((c) => (
                   <tr key={c.id}>
                     <td className="px-5 py-3 font-medium text-ink-900">{c.name}</td>
                     <td className="px-5 py-3 text-ink-700">
@@ -174,7 +211,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
     e.preventDefault()
     setError('')
     if (!name.trim() || !startTime || !endTime) {
-      setError('Fill in a class name, start time, and end time.')
+      setError('Fill in a lesson name, start time, and end time.')
       return
     }
     if (endTime <= startTime) {
@@ -204,7 +241,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="card w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-ink-900">New class</h3>
+          <h3 className="font-semibold text-ink-900">New lesson</h3>
           <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
             <X size={18} />
           </button>
@@ -213,7 +250,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
         <form onSubmit={handleSave} className="space-y-4">
           {error && <Alert tone="rose">{error}</Alert>}
           <div>
-            <label className="field-label">Class name</label>
+            <label className="field-label">Lesson name</label>
             <input
               className="field-input"
               value={name}
@@ -265,7 +302,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
           </div>
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">
-              {saving ? 'Creating…' : 'Create class'}
+              {saving ? 'Creating…' : 'Create lesson'}
             </button>
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
@@ -294,7 +331,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
     setDetailsError('')
     setDetailsSaved(false)
     if (!name.trim() || !startTime || !endTime) {
-      setDetailsError('Fill in a class name, start time, and end time.')
+      setDetailsError('Fill in a lesson name, start time, and end time.')
       return
     }
     if (endTime <= startTime) {
@@ -331,7 +368,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
       <div className="card w-full max-w-md p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-ink-900">Edit class</h3>
+          <h3 className="font-semibold text-ink-900">Edit lesson</h3>
           <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
             <X size={18} />
           </button>
@@ -339,9 +376,9 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
 
         <form onSubmit={handleSaveDetails} className="space-y-4 mb-6 pb-6 border-b border-sand-200">
           {detailsError && <Alert tone="rose">{detailsError}</Alert>}
-          {detailsSaved && <Alert tone="brand">Class details saved.</Alert>}
+          {detailsSaved && <Alert tone="brand">Lesson details saved.</Alert>}
           <div>
-            <label className="field-label">Class name</label>
+            <label className="field-label">Lesson name</label>
             <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
@@ -387,7 +424,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
             </div>
           </div>
           <button type="submit" disabled={savingDetails} className="btn-primary">
-            {savingDetails ? 'Saving…' : 'Save class details'}
+            {savingDetails ? 'Saving…' : 'Save lesson details'}
           </button>
         </form>
 
@@ -601,7 +638,7 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
         <p className="text-xs text-ink-500 mt-3">
           {classItem.fee_amount != null
             ? `Pick a billing frequency next to any newly-ticked student to set up a recurring invoice at RM ${Number(classItem.fee_amount).toFixed(2)} for them. Leave it on "No invoice" to skip. Only applies to students being added now — already-enrolled students are unaffected.`
-            : 'This class has no fee set, so a recurring invoice would be RM 0.00 — set a fee on the class details above first if you want billing to charge anything.'}
+            : 'This lesson has no fee set, so a recurring invoice would be RM 0.00 — set a fee on the lesson details above first if you want billing to charge anything.'}
         </p>
       )}
 

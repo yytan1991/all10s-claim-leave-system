@@ -99,7 +99,7 @@ export default function StudentDashboard() {
     <AppLayout title="Student Management" subtitle="Enrollment, attendance, and billing at a glance.">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Total students" value={loading ? '—' : students.length} icon={Users2} tone="brand" />
-        <StatCard label="Total classes" value={loading ? '—' : classes.length} icon={School} tone="brand" />
+        <StatCard label="Total lessons" value={loading ? '—' : classes.length} icon={School} tone="brand" />
         <StatCard label="Active teachers" value={loading ? '—' : activeTeachers} icon={UserCog} tone="brand" />
         <StatCard
           label="Outstanding amount"
@@ -112,11 +112,11 @@ export default function StudentDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="card p-5">
-          <h3 className="font-semibold text-ink-900 mb-4">Today's class attendance</h3>
+          <h3 className="font-semibold text-ink-900 mb-4">Today's lesson attendance</h3>
           {loading ? (
             <p className="text-sm text-ink-500">Loading…</p>
           ) : classesToday.length === 0 ? (
-            <p className="text-sm text-ink-500">No classes scheduled today.</p>
+            <p className="text-sm text-ink-500">No lessons scheduled today.</p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {classesToday.map((c) => {

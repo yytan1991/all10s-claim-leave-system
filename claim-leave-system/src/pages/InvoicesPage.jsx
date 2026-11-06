@@ -387,7 +387,7 @@ export default function InvoicesPage() {
               </select>
               <input
                 className="field-input"
-                placeholder="Class Name"
+                placeholder="Lesson Name"
                 value={filters.className}
                 onChange={(e) => setFilters({ ...filters, className: e.target.value })}
               />
@@ -1218,7 +1218,7 @@ function EditInvoicePage({ invoice, students, onBack, onSaved }) {
               </p>
             </div>
             <div>
-              <label className="text-xs text-ink-500 mb-1 block">Class (optional)</label>
+              <label className="text-xs text-ink-500 mb-1 block">Lesson (optional)</label>
               <select className="field-input" value={className} onChange={(e) => setClassName(e.target.value)}>
                 <option value="">— None —</option>
                 {studentClasses.map((c) => (

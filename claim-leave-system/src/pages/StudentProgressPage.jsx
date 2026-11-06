@@ -57,14 +57,14 @@ export default function StudentProgressPage() {
       ) : classes.length === 0 ? (
         <EmptyState
           icon={TrendingUp}
-          title="No classes available"
-          description={isAdmin ? 'Create a class first, under Student Management.' : "You're not assigned to teach any classes yet."}
+          title="No lessons available"
+          description={isAdmin ? 'Create a lesson first, under Student Management.' : "You're not assigned to teach any lessons yet."}
         />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mb-6">
             <div>
-              <label className="field-label">Class</label>
+              <label className="field-label">Lesson</label>
               <select className="field-input" value={classId} onChange={(e) => setClassId(e.target.value)}>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -76,7 +76,7 @@ export default function StudentProgressPage() {
             <div>
               <label className="field-label">Student</label>
               <select className="field-input" value={studentId} onChange={(e) => setStudentId(e.target.value)} disabled={students.length === 0}>
-                {students.length === 0 && <option value="">No students in this class</option>}
+                {students.length === 0 && <option value="">No students in this lesson</option>}
                 {students.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.full_name}

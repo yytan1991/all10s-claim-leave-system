@@ -206,17 +206,17 @@ export default function StudentAttendancePage() {
   const isComplete = students.length > 0 && markedCount === students.length
 
   return (
-    <AppLayout title="Student Attendance" subtitle="Mark attendance for a class on a specific date.">
+    <AppLayout title="Student Attendance" subtitle="Mark attendance for a lesson on a specific date.">
       <div className={`card p-5 mb-6 grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <div>
-          <label className="field-label">Class</label>
+          <label className="field-label">Lesson</label>
           <select
             className="field-input"
             value={classId}
             onChange={(e) => setClassId(e.target.value)}
             disabled={visibleClasses.length === 0}
           >
-            {visibleClasses.length === 0 && <option value="">No classes available</option>}
+            {visibleClasses.length === 0 && <option value="">No lessons available</option>}
             {visibleClasses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -224,7 +224,7 @@ export default function StudentAttendancePage() {
             ))}
           </select>
           {!isAdmin && (
-            <p className="text-[11px] text-ink-500 mt-1">Only showing classes scheduled for today.</p>
+            <p className="text-[11px] text-ink-500 mt-1">Only showing lessons scheduled for today.</p>
           )}
         </div>
         <div>
@@ -257,17 +257,17 @@ export default function StudentAttendancePage() {
       ) : visibleClasses.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
-          title="No classes available"
+          title="No lessons available"
           description={
             isAdmin
-              ? 'Create a class first, under Student Management.'
-              : "You have no classes scheduled today, or you're not assigned to teach any."
+              ? 'Create a lesson first, under Student Management.'
+              : "You have no lessons scheduled today, or you're not assigned to teach any."
           }
         />
       ) : rosterLoading ? (
         <p className="text-sm text-ink-500">Loading roster…</p>
       ) : students.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No students enrolled" description="Enroll students into this class first." />
+        <EmptyState icon={ClipboardList} title="No students enrolled" description="Enroll students into this lesson first." />
       ) : (
         <>
           <div className={`mb-3 flex items-center justify-between rounded-md px-4 py-2 text-sm font-medium ${

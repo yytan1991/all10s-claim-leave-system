@@ -82,20 +82,20 @@ export default function LearningMaterialsPage() {
   const typeInfo = (value) => TYPES.find((t) => t.value === value) || TYPES[1]
 
   return (
-    <AppLayout title="Learning Materials" subtitle="Upload videos, worksheets and notes for your classes. Enrolled students see them in their portal.">
+    <AppLayout title="Learning Materials" subtitle="Upload videos, worksheets and notes for your lessons. Enrolled students see them in their portal.">
       {loading ? (
         <p className="text-sm text-ink-500">Loading…</p>
       ) : classes.length === 0 ? (
         <EmptyState
           icon={BookOpen}
-          title="No classes available"
-          description={isAdmin ? 'Create a class first, under Student Management.' : "You're not assigned to teach any classes yet."}
+          title="No lessons available"
+          description={isAdmin ? 'Create a lesson first, under Student Management.' : "You're not assigned to teach any lessons yet."}
         />
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-4 mb-5">
             <div className="w-full sm:w-72">
-              <label className="field-label">Class</label>
+              <label className="field-label">Lesson</label>
               <select className="field-input" value={classId} onChange={(e) => setClassId(e.target.value)}>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -118,7 +118,7 @@ export default function LearningMaterialsPage() {
           {materialsLoading ? (
             <p className="text-sm text-ink-500">Loading…</p>
           ) : materials.length === 0 ? (
-            <EmptyState icon={BookOpen} title="Nothing uploaded for this class yet" description="Add a video, worksheet or note above." />
+            <EmptyState icon={BookOpen} title="Nothing uploaded for this lesson yet" description="Add a video, worksheet or note above." />
           ) : (
             <div className="space-y-4">
               {materials.map((m) => {

@@ -424,7 +424,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
   )
 }
 
-function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose }) {
+export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose }) {
   const isTeacherMode = mode === 'teachers'
   const table = isTeacherMode ? 'class_teachers' : 'class_enrollments'
   const memberTable = isTeacherMode ? 'profiles' : 'students'
@@ -443,11 +443,12 @@ function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, onClose 
     async function load() {
       setLoading(true)
       const [{ data: members }, { data: links }] = await Promise.all([
-        supabase.from(memberTable).select('id, full_name').eq('org_id', orgId).order('full_name'),
+        supabase.from(memberTable).select(isTeacherMode ? 'id, full_name' : '*').eq('org_id', orgId).order('full_name'),
         supabase.from(table).select(memberIdField).eq('class_id', classItem.id),
       ])
       const linkedSet = new Set((links || []).map((l) => l[memberIdField]))
-      setAllMembers(members || [])
+      // Archived students aren't offered for enrolment (unless they're somehow still in this class).
+      setAllMembers((members || []).filter((m) => !m.archived_at || linkedSet.has(m.id)))
       setLinkedIds(linkedSet)
       setChecked(new Set(linkedSet))
       setLoading(false)

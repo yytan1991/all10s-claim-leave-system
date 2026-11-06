@@ -332,10 +332,10 @@ function RowMenu({ items }) {
   )
 }
 
-function Modal({ title, onClose, children, wide = false }) {
+function Modal({ title, onClose, children, wide = false, xl = false }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className={`card w-full ${wide ? 'max-w-3xl' : 'max-w-md'} p-6 max-h-[90vh] overflow-y-auto`}>
+      <div className={`card w-full ${xl ? 'max-w-5xl p-8 max-h-[92vh]' : `${wide ? 'max-w-3xl' : 'max-w-md'} p-6 max-h-[90vh]`} overflow-y-auto`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-ink-900">{title}</h3>
           <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
@@ -457,40 +457,51 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Student details" onClose={onClose}>
-      <form onSubmit={handleSave} className="space-y-4">
+    <Modal title="Student details" onClose={onClose} xl>
+      <form onSubmit={handleSave} className="space-y-6">
         {error && <Alert tone="rose">{error}</Alert>}
         {student.archived_at && <Alert tone="amber">This student is archived (since {formatDate(student.archived_at.slice(0, 10))}).</Alert>}
-        <div>
-          <label className="field-label">Student name</label>
-          <input className="field-input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </div>
-        <div>
-          <label className="field-label">Date of birth</label>
-          <DatePicker value={dob} onChange={setDob} maxDate={toISODate(new Date())} />
-        </div>
-        <div>
-          <label className="field-label">Enrolled lessons</label>
-          <div className="rounded-md bg-sand-50 px-3 py-2 text-sm text-ink-700">
-            {lessons.length ? lessons.join(', ') : 'Not enrolled in any lesson'}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-ink-900">Student</h4>
+            <div>
+              <label className="field-label">Student name</label>
+              <input className="field-input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            </div>
+            <div>
+              <label className="field-label">Date of birth</label>
+              <DatePicker value={dob} onChange={setDob} maxDate={toISODate(new Date())} />
+            </div>
+            <div>
+              <label className="field-label">Enrolled lessons</label>
+              <div className="rounded-md bg-sand-50 px-3 py-2 text-sm text-ink-700">
+                {lessons.length ? lessons.join(', ') : 'Not enrolled in any lesson'}
+              </div>
+              <p className="text-xs text-ink-500 mt-1">To change lessons, use Lessons → Edit → Students.</p>
+            </div>
           </div>
-          <p className="text-xs text-ink-500 mt-1">To change lessons, use Lessons → Edit → Students.</p>
-        </div>
-        <div>
-          <label className="field-label">Parent name</label>
-          <input className="field-input" value={parentName} onChange={(e) => setParentName(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="field-label">Parent phone</label>
-            <input className="field-input" value={parentContact} onChange={(e) => setParentContact(e.target.value)} />
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-ink-900">Parent / guardian</h4>
+            <div>
+              <label className="field-label">Parent name</label>
+              <input className="field-input" value={parentName} onChange={(e) => setParentName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="field-label">Parent phone</label>
+                <input className="field-input" value={parentContact} onChange={(e) => setParentContact(e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label">Parent email</label>
+                <input type="email" className="field-input" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="field-label">Parent email</label>
-            <input type="email" className="field-input" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
-          </div>
         </div>
-        <div className="flex gap-3 pt-2">
+
+        <div className="flex gap-3 pt-4 border-t border-sand-100">
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? 'Saving…' : 'Save changes'}
           </button>

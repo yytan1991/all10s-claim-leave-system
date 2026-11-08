@@ -76,11 +76,8 @@ const crmLinks = [
 const managerLinks = [
   { to: '/approvals', label: 'Approvals', icon: ClipboardCheck },
   { to: '/attendance-log', label: 'Attendance Log', icon: Clock },
-]
-
-const adminLinks = [
-  { to: '/employees', label: 'Employees', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/employees', label: 'Employees', icon: Users, adminOnly: true },
+  { to: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
 ]
 
 const financeLinks = [
@@ -111,7 +108,7 @@ export default function Sidebar({ className = '' }) {
         }}
         className="flex-1 overflow-y-auto px-3 py-4 space-y-1"
       >
-        <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-white/40">Self-service</p>
+        <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-white/40">Organisation</p>
         {staffLinks.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -137,10 +134,10 @@ export default function Sidebar({ className = '' }) {
           </NavLink>
         ))}
 
-        {isManager && (
+        {(isManager || isAdmin) && (
           <>
             <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Manager</p>
-            {managerLinks.map(({ to, label, icon: Icon }) => (
+            {managerLinks.filter((link) => !link.adminOnly || isAdmin).map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -170,22 +167,6 @@ export default function Sidebar({ className = '' }) {
           <>
             <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Finance</p>
             {financeLinks.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link')}
-              >
-                <Icon size={17} strokeWidth={2} />
-                {label}
-              </NavLink>
-            ))}
-          </>
-        )}
-
-        {isAdmin && (
-          <>
-            <p className="px-3 pb-1 pt-4 text-[11px] font-semibold text-white/40">Admin</p>
-            {adminLinks.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}

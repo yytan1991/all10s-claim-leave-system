@@ -524,13 +524,19 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
       if (toRemove.length > 0) {
         const removedNames = toRemove.map((id) => lessonList.find((l) => l.id === id)?.name).filter(Boolean)
         const { data: plans } = await supabase.from('recurring_invoice_plans').select('id, items').eq('student_id', student.id)
-        const matching = (plans || []).filter((p) => removedNames.includes(p.items?.[0]?.description))
-        if (matching.length > 0) {
-          const names = [...new Set(matching.map((p) => p.items[0].description))].join(', ')
+        const affected = (plans || []).filter((p) => (p.items || []).some((it) => removedNames.includes(it.description)))
+        const whole = affected.filter((p) => (p.items || []).every((it) => removedNames.includes(it.description)))
+        const mixed = affected.filter((p) => !whole.includes(p))
+        if (whole.length > 0) {
+          const names = [...new Set(whole.flatMap((p) => (p.items || []).map((it) => it.description)))].join(', ')
           const stop = confirm(
             `${student.full_name} has a recurring invoice for ${names}.\n\nStop it now that they have left the lesson?\n\nOK = stop the recurring invoice\nCancel = keep it`
           )
-          if (stop) await supabase.from('recurring_invoice_plans').delete().in('id', matching.map((p) => p.id))
+          if (stop) await supabase.from('recurring_invoice_plans').delete().in('id', whole.map((p) => p.id))
+        }
+        if (mixed.length > 0) {
+          const names = [...new Set(mixed.flatMap((p) => (p.items || []).map((it) => it.description).filter((d) => removedNames.includes(d))))].join(', ')
+          alert(`${student.full_name} also has a recurring invoice that bills for ${names} together with other lessons. Open Recurring Invoice and remove that line from it.`)
         }
       }
 
@@ -539,7 +545,7 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
       const wanted = toAdd.filter((id) => frequencies[id])
       if (wanted.length > 0) {
         const { data: existingPlans } = await supabase.from('recurring_invoice_plans').select('items').eq('student_id', student.id)
-        const existingNames = new Set((existingPlans || []).map((p) => p.items?.[0]?.description))
+        const existingNames = new Set((existingPlans || []).flatMap((p) => (p.items || []).map((it) => it.description)))
         const today = toISODate(new Date())
         const rows = []
         const skipped = []
@@ -578,7 +584,7 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
       // Newly enrolled lessons that have a fee but still no recurring invoice: ask now, so it isn't forgotten.
       if (toAdd.length > 0) {
         const { data: plansNow } = await supabase.from('recurring_invoice_plans').select('items').eq('student_id', student.id)
-        const haveNames = new Set((plansNow || []).map((p) => p.items?.[0]?.description))
+        const haveNames = new Set((plansNow || []).flatMap((p) => (p.items || []).map((it) => it.description)))
         const missing = toAdd
           .map((id) => lessonList.find((l) => l.id === id))
           .filter((l) => l && l.fee_amount != null && Number(l.fee_amount) > 0 && !haveNames.has(l.name))
@@ -707,8 +713,6 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
     {billingPrompt && (
       <BillingPromptModal
         items={billingPrompt}
-        orgId={student.org_id}
-        createdBy={createdBy}
         onDone={() => {
           setBillingPrompt(null)
           onSaved()

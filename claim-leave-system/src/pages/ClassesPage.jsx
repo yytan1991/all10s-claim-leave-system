@@ -579,7 +579,7 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
     // Newly enrolled students in a lesson that has a fee but no recurring invoice yet: ask now, so it isn't forgotten.
     if (!isTeacherMode && toAdd.length > 0 && classItem.fee_amount != null && Number(classItem.fee_amount) > 0) {
       const { data: plansNow } = await supabase.from('recurring_invoice_plans').select('student_id, items').in('student_id', toAdd)
-      const haveIds = new Set((plansNow || []).filter((p) => p.items?.[0]?.description === classItem.name).map((p) => p.student_id))
+      const haveIds = new Set((plansNow || []).filter((p) => (p.items || []).some((it) => it.description === classItem.name)).map((p) => p.student_id))
       const missing = toAdd
         .filter((id) => !haveIds.has(id))
         .map((id) => ({
@@ -680,8 +680,6 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
       {billingPrompt && (
         <BillingPromptModal
           items={billingPrompt}
-          orgId={orgId}
-          createdBy={createdBy}
           onDone={() => {
             setBillingPrompt(null)
             onSaved()

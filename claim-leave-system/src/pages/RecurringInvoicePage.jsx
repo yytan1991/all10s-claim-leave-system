@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, X, Play, Pencil, CalendarClock, ChevronDown, ChevronUp, ArrowLeft, MoreVertical, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -74,6 +75,46 @@ function parsePeriodLabel(label) {
   if (!from) return null
   const to = parts[1] ? parseOne(parts[1]) : from
   return { from, to: to || from }
+}
+
+// How many months a frequency choice means: a preset ("1", "3", "6", "12") or a number typed under "Custom".
+function monthsOf(recurrence, customMonths) {
+  if (recurrence === 'custom') return Math.floor(Number(customMonths)) || 0
+  return Number(recurrence) || 0
+}
+
+// The frequency dropdown, with a "Custom" choice that reveals a box for the number of months.
+function FrequencyField({ recurrence, customMonths, onRecurrenceChange, onCustomMonthsChange, blankLabel }) {
+  return (
+    <div>
+      <select className="field-input" value={recurrence} onChange={(e) => onRecurrenceChange(e.target.value)}>
+        {blankLabel && <option value="">{blankLabel}</option>}
+        {RECURRENCE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+        <option value="custom">Custom…</option>
+      </select>
+      {recurrence === 'custom' && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-ink-700">Every</span>
+          <input
+            type="number"
+            min="1"
+            max="120"
+            step="1"
+            className="field-input w-24"
+            value={customMonths}
+            onChange={(e) => onCustomMonthsChange(e.target.value)}
+            placeholder="e.g. 5"
+            autoFocus
+          />
+          <span className="text-sm text-ink-700">month(s)</span>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function RowMenu({ onEdit, onGenerate, onDelete }) {
@@ -153,6 +194,7 @@ const emptyFilters = {
 
 export default function RecurringInvoicePage() {
   const { profile } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [plans, setPlans] = useState([])
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -166,6 +208,8 @@ export default function RecurringInvoicePage() {
   const [sortField, setSortField] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
   const [bulkEditing, setBulkEditing] = useState(false)
+  const [prefill, setPrefill] = useState(null) // { studentId, items, note } when arriving from a lesson enrolment
+  const [queueState, setQueueState] = useState(null) // { entries: [{ studentId, lessonIds }], index }
 
   async function load() {
     setLoading(true)
@@ -182,8 +226,53 @@ export default function RecurringInvoicePage() {
     setLoading(false)
   }
 
+  // Arriving from the "add a recurring invoice?" notice after enrolling students in lessons:
+  // open the new-plan form already filled in for the first student, then the next, and so on.
+  // The link looks like /recurring-invoice?new=1&q=<studentId>~<lessonId>,<lessonId>;<studentId>~<lessonId>
+  async function showQueued(entries, index) {
+    const entry = entries[index]
+    const [{ data: lessonRows }, { data: studentRow }] = await Promise.all([
+      supabase.from('classes').select('id, name, fee_amount').in('id', entry.lessonIds),
+      supabase.from('students').select('full_name').eq('id', entry.studentId).maybeSingle(),
+    ])
+    const items = (lessonRows || []).map((l) => ({ description: l.name, amount: l.fee_amount != null ? String(l.fee_amount) : '' }))
+    const position = entries.length > 1 ? ` (${index + 1} of ${entries.length})` : ''
+    setPrefill({
+      studentId: entry.studentId,
+      items,
+      note: `Filled in for ${studentRow?.full_name || 'this student'}${position} from the lesson(s) just enrolled. Check the billing lines and frequency, then click Create plan.`,
+    })
+    setQueueState({ entries, index })
+    setActivePlan(null)
+    setView('create')
+  }
+
+  function queueNext() {
+    if (queueState && queueState.index + 1 < queueState.entries.length) {
+      showQueued(queueState.entries, queueState.index + 1)
+    } else {
+      setQueueState(null)
+      setPrefill(null)
+      setView('list')
+    }
+  }
+
   useEffect(() => {
-    if (profile) load()
+    if (!profile) return
+    load().then(() => {
+      const q = searchParams.get('q')
+      if (searchParams.get('new') === '1' && q) {
+        const entries = q
+          .split(';')
+          .map((part) => {
+            const [studentId, lessons] = part.split('~')
+            return { studentId, lessonIds: (lessons || '').split(',').filter(Boolean) }
+          })
+          .filter((e) => e.studentId && e.lessonIds.length > 0)
+        setSearchParams({}, { replace: true }) // so a refresh doesn't reopen it
+        if (entries.length > 0) showQueued(entries, 0)
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.org_id])
 
@@ -324,15 +413,23 @@ export default function RecurringInvoicePage() {
   if (view === 'create' || view === 'edit') {
     return (
       <PlanPage
+        key={queueState ? `queued-${queueState.index}` : view}
         orgId={profile.org_id}
         createdBy={profile.id}
         students={students}
         plan={view === 'edit' ? activePlan : null}
-        onBack={() => setView('list')}
-        onSaved={async () => {
-          await load()
+        prefill={view === 'create' ? prefill : null}
+        onBack={() => {
+          setQueueState(null)
+          setPrefill(null)
           setView('list')
         }}
+        onSaved={async () => {
+          await load()
+          if (queueState) queueNext()
+          else setView('list')
+        }}
+        onSkip={queueState && queueState.index + 1 < queueState.entries.length ? queueNext : undefined}
       />
     )
   }
@@ -418,7 +515,11 @@ export default function RecurringInvoicePage() {
 
       <div className="flex justify-end mb-4">
         <button
-          onClick={() => setView('create')}
+          onClick={() => {
+            setPrefill(null)
+            setQueueState(null)
+            setView('create')
+          }}
           className="btn-primary text-sm"
           disabled={students.length === 0}
         >
@@ -575,11 +676,16 @@ function ItemsEditor({ items, setItems }) {
 }
 
 
-function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
+function PlanPage({ orgId, createdBy, students, plan, prefill, onBack, onSaved, onSkip }) {
   const isEdit = Boolean(plan)
-  const [studentId, setStudentId] = useState(plan?.student_id || students[0]?.id || '')
-  const [items, setItems] = useState(plan?.items?.length ? plan.items : [{ description: '', amount: '' }])
-  const [recurrence, setRecurrence] = useState(String(plan?.recurrence_interval_months || 1))
+  const [studentId, setStudentId] = useState(plan?.student_id || prefill?.studentId || students[0]?.id || '')
+  const [items, setItems] = useState(
+    plan?.items?.length ? plan.items : prefill?.items?.length ? prefill.items : [{ description: '', amount: '' }]
+  )
+  const startMonths = String(plan?.recurrence_interval_months || 1)
+  const startIsPreset = RECURRENCE_OPTIONS.some((o) => o.value === startMonths)
+  const [recurrence, setRecurrence] = useState(startIsPreset ? startMonths : 'custom')
+  const [customMonths, setCustomMonths] = useState(startIsPreset ? '' : startMonths)
   const [nextGenerationDate, setNextGenerationDate] = useState(
     plan?.next_generation_date || new Date().toISOString().slice(0, 10)
   )
@@ -596,21 +702,35 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
 
   const total = items.reduce((s, it) => s + Number(it.amount || 0), 0)
   const nextInvoiceMonth = periodLabelFromRange(periodFrom, periodTo)
+  const months = monthsOf(recurrence, customMonths)
 
   function handleDateChange(value) {
     setNextGenerationDate(value)
     if (!monthsEdited) {
       const fromM = dateToMonthInput(value)
       setPeriodFrom(fromM)
-      setPeriodTo(addMonthsToMonthInput(fromM, Number(recurrence) - 1))
+      setPeriodTo(addMonthsToMonthInput(fromM, Math.max(months, 1) - 1))
     }
   }
   function handleRecurrenceChange(value) {
     setRecurrence(value)
     if (!monthsEdited) {
+      const m = monthsOf(value, customMonths)
+      if (m >= 1) {
+        const fromM = dateToMonthInput(nextGenerationDate)
+        setPeriodFrom(fromM)
+        setPeriodTo(addMonthsToMonthInput(fromM, m - 1))
+      }
+    }
+  }
+  // Typing a custom number of months works out the starting and ending month automatically.
+  function handleCustomMonthsChange(value) {
+    setCustomMonths(value)
+    const m = Math.floor(Number(value)) || 0
+    if (!monthsEdited && m >= 1) {
       const fromM = dateToMonthInput(nextGenerationDate)
       setPeriodFrom(fromM)
-      setPeriodTo(addMonthsToMonthInput(fromM, Number(value) - 1))
+      setPeriodTo(addMonthsToMonthInput(fromM, m - 1))
     }
   }
   function handlePeriodFromChange(value) {
@@ -630,6 +750,10 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
       setError('Pick a student, add at least one billing line, and set a next generation date.')
       return
     }
+    if (!(months >= 1 && months <= 120)) {
+      setError('Enter how many months the custom frequency covers (a whole number from 1 to 120).')
+      return
+    }
     setSaving(true)
 
     const payload = {
@@ -637,7 +761,7 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
       student_id: studentId,
       items: cleanItems,
       amount: total,
-      recurrence_interval_months: Number(recurrence),
+      recurrence_interval_months: months,
       next_generation_date: nextGenerationDate,
       next_invoice_month: nextInvoiceMonth,
     }
@@ -674,6 +798,7 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
 
       <form onSubmit={handleSave} className="max-w-2xl space-y-6">
         {error && <Alert tone="rose">{error}</Alert>}
+        {prefill?.note && !isEdit && <Alert tone="amber">{prefill.note}</Alert>}
 
         <div className="card p-5 space-y-4">
           <h3 className="font-semibold text-ink-900 text-sm">Student</h3>
@@ -695,13 +820,19 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
           <h3 className="font-semibold text-ink-900 text-sm">Schedule</h3>
           <div>
             <label className="field-label">Frequency</label>
-            <select className="field-input" value={recurrence} onChange={(e) => handleRecurrenceChange(e.target.value)}>
-              {RECURRENCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <FrequencyField
+              recurrence={recurrence}
+              customMonths={customMonths}
+              onRecurrenceChange={handleRecurrenceChange}
+              onCustomMonthsChange={handleCustomMonthsChange}
+            />
+            {recurrence === 'custom' && months >= 1 && periodFrom && (
+              <p className="text-xs text-ink-500 mt-1.5" data-testid="custom-summary">
+                Covers {months} month{months === 1 ? '' : 's'}: starts{' '}
+                <span className="font-medium">{monthInputToLabel(periodFrom)}</span>, ends{' '}
+                <span className="font-medium">{monthInputToLabel(periodTo)}</span>.
+              </p>
+            )}
           </div>
           <div>
             <label className="field-label">Next generation date</label>
@@ -741,6 +872,11 @@ function PlanPage({ orgId, createdBy, students, plan, onBack, onSaved }) {
           <button type="button" onClick={onBack} className="btn-secondary">
             Cancel
           </button>
+          {onSkip && (
+            <button type="button" onClick={onSkip} className="btn-secondary">
+              Skip this student
+            </button>
+          )}
         </div>
       </form>
     </AppLayout>
@@ -895,17 +1031,23 @@ function GenerateInvoiceModal({ plan, onClose, onGenerate }) {
 
 function BulkEditModal({ count, onClose, onSaved }) {
   const [recurrence, setRecurrence] = useState('')
+  const [customMonths, setCustomMonths] = useState('')
   const [nextGenDate, setNextGenDate] = useState('')
   const [saving, setSaving] = useState(false)
 
   async function handleSave(e) {
     e.preventDefault()
+    const chosenMonths = recurrence ? monthsOf(recurrence, customMonths) : 0
+    if (recurrence && !(chosenMonths >= 1 && chosenMonths <= 120)) {
+      alert('Enter how many months the custom frequency covers (a whole number from 1 to 120).')
+      return
+    }
     setSaving(true)
     const patch = {}
-    if (recurrence) patch.recurrence_interval_months = Number(recurrence)
+    if (recurrence) patch.recurrence_interval_months = chosenMonths
     if (nextGenDate) {
       patch.next_generation_date = nextGenDate
-      patch.next_invoice_month = computePeriodLabel(nextGenDate, recurrence || 1)
+      patch.next_invoice_month = computePeriodLabel(nextGenDate, chosenMonths || 1)
     }
     await onSaved(patch)
     setSaving(false)
@@ -924,14 +1066,13 @@ function BulkEditModal({ count, onClose, onSaved }) {
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="field-label">New frequency (optional)</label>
-            <select className="field-input" value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-              <option value="">— No change —</option>
-              {RECURRENCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <FrequencyField
+              recurrence={recurrence}
+              customMonths={customMonths}
+              onRecurrenceChange={setRecurrence}
+              onCustomMonthsChange={setCustomMonths}
+              blankLabel="— No change —"
+            />
           </div>
           <div>
             <label className="field-label">New next generation date (optional)</label>

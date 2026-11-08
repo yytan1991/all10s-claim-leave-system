@@ -8,6 +8,7 @@ import DatePicker from '../components/DatePicker'
 import { Alert, EmptyState } from '../components/UI'
 import { QuickPayModal } from './InvoicesPage'
 import { generateInvoicePdf } from '../lib/invoicePdf'
+import BillingPromptModal from '../components/BillingPromptModal'
 import { formatDate, getMonthGrid, toISODate, DAY_NAMES, formatTimeLabel, RECURRENCE_OPTIONS } from '../lib/helpers'
 
 function ageFrom(dob) {
@@ -445,6 +446,7 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
   const [checked, setChecked] = useState(new Set())
   const [frequencies, setFrequencies] = useState({}) // lesson id -> months between invoices
   const [loadingLessons, setLoadingLessons] = useState(true)
+  const [billingPrompt, setBillingPrompt] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -572,6 +574,27 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
           alert(`${student.full_name} already has a recurring invoice for ${skipped.join(', ')}, so no new one was created.`)
         }
       }
+
+      // Newly enrolled lessons that have a fee but still no recurring invoice: ask now, so it isn't forgotten.
+      if (toAdd.length > 0) {
+        const { data: plansNow } = await supabase.from('recurring_invoice_plans').select('items').eq('student_id', student.id)
+        const haveNames = new Set((plansNow || []).map((p) => p.items?.[0]?.description))
+        const missing = toAdd
+          .map((id) => lessonList.find((l) => l.id === id))
+          .filter((l) => l && l.fee_amount != null && Number(l.fee_amount) > 0 && !haveNames.has(l.name))
+          .map((l) => ({
+            studentId: student.id,
+            studentName: fullName.trim() || student.full_name,
+            lessonId: l.id,
+            lessonName: l.name,
+            fee: Number(l.fee_amount),
+          }))
+        if (missing.length > 0) {
+          setBillingPrompt(missing)
+          setSaving(false)
+          return
+        }
+      }
     }
 
     setSaving(false)
@@ -579,6 +602,7 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
   }
 
   return (
+    <>
     <Modal title="Student details" onClose={onClose} xl>
       <form onSubmit={handleSave} className="space-y-6">
         {error && <Alert tone="rose">{error}</Alert>}
@@ -680,6 +704,18 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
         </div>
       </form>
     </Modal>
+    {billingPrompt && (
+      <BillingPromptModal
+        items={billingPrompt}
+        orgId={student.org_id}
+        createdBy={createdBy}
+        onDone={() => {
+          setBillingPrompt(null)
+          onSaved()
+        }}
+      />
+    )}
+    </>
   )
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, X, Users2, CalendarClock, UserCog, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import BillingPromptModal from '../components/BillingPromptModal'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
@@ -479,6 +480,7 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [perStudentFrequency, setPerStudentFrequency] = useState({})
+  const [billingPrompt, setBillingPrompt] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -574,6 +576,26 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
       }
     }
 
+    // Newly enrolled students in a lesson that has a fee but no recurring invoice yet: ask now, so it isn't forgotten.
+    if (!isTeacherMode && toAdd.length > 0 && classItem.fee_amount != null && Number(classItem.fee_amount) > 0) {
+      const { data: plansNow } = await supabase.from('recurring_invoice_plans').select('student_id, items').in('student_id', toAdd)
+      const haveIds = new Set((plansNow || []).filter((p) => p.items?.[0]?.description === classItem.name).map((p) => p.student_id))
+      const missing = toAdd
+        .filter((id) => !haveIds.has(id))
+        .map((id) => ({
+          studentId: id,
+          studentName: allMembers.find((m) => m.id === id)?.full_name || 'Student',
+          lessonId: classItem.id,
+          lessonName: classItem.name,
+          fee: Number(classItem.fee_amount),
+        }))
+      if (missing.length > 0) {
+        setBillingPrompt(missing)
+        setSaving(false)
+        return
+      }
+    }
+
     setSaving(false)
     onSaved()
   }
@@ -654,6 +676,18 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
           Close
         </button>
       </div>
+
+      {billingPrompt && (
+        <BillingPromptModal
+          items={billingPrompt}
+          orgId={orgId}
+          createdBy={createdBy}
+          onDone={() => {
+            setBillingPrompt(null)
+            onSaved()
+          }}
+        />
+      )}
     </div>
   )
 }

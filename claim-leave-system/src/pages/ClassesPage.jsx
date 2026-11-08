@@ -3,10 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, X, Users2, CalendarClock, UserCog, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import BillingPromptModal from '../components/BillingPromptModal'
+import FrequencyPicker from '../components/FrequencyPicker'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
-import { DAY_NAMES, formatTimeLabel, RECURRENCE_OPTIONS } from '../lib/helpers'
+import { DAY_NAMES, formatTimeLabel } from '../lib/helpers'
 
 function computePeriodLabel(dateStr, intervalMonths) {
   if (!dateStr) return ''
@@ -480,6 +481,7 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [perStudentFrequency, setPerStudentFrequency] = useState({})
+  const [perStudentCustom, setPerStudentCustom] = useState({}) // student id -> number typed under Custom
   const [billingPrompt, setBillingPrompt] = useState(null)
 
   useEffect(() => {
@@ -520,6 +522,19 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
     const toAdd = [...checked].filter((id) => !linkedIds.has(id))
     const toRemove = [...linkedIds].filter((id) => !checked.has(id))
 
+    // A custom billing period needs a number of months before anything is saved.
+    if (!isTeacherMode) {
+      for (const id of toAdd) {
+        const m = Math.floor(Number(perStudentCustom[id])) || 0
+        if (perStudentFrequency[id] === 'custom' && !(m >= 1 && m <= 120)) {
+          const name = allMembers.find((x) => x.id === id)?.full_name || 'a student'
+          setSaving(false)
+          setError(`Enter how many months the custom billing covers for ${name} (a whole number from 1 to 120).`)
+          return
+        }
+      }
+    }
+
     if (toAdd.length > 0) {
       const rows = toAdd.map((id) => ({
         org_id: orgId,
@@ -557,14 +572,15 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
       const today = new Date().toISOString().slice(0, 10)
       const planRows = studentsWithFrequency.map((studentId) => {
         const freq = perStudentFrequency[studentId]
+        const months = freq === 'custom' ? Math.floor(Number(perStudentCustom[studentId])) || 0 : Number(freq)
         return {
           org_id: orgId,
           student_id: studentId,
           items: [{ description: classItem.name, amount: feeAmount }],
           amount: feeAmount,
-          recurrence_interval_months: Number(freq),
+          recurrence_interval_months: months,
           next_generation_date: today,
-          next_invoice_month: computePeriodLabel(today, freq),
+          next_invoice_month: computePeriodLabel(today, months),
           created_by: createdBy,
         }
       })
@@ -632,24 +648,19 @@ export function MembersChecklist({ orgId, createdBy, classItem, mode, onSaved, o
               .map((m) => {
                 const isNew = checked.has(m.id) && !linkedIds.has(m.id)
                 return (
-                  <div key={m.id} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-sand-50 text-sm">
-                    <label className="flex items-center gap-3 cursor-pointer flex-1">
+                  <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 py-2 rounded hover:bg-sand-50 text-sm">
+                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-[8rem]">
                       <input type="checkbox" checked={checked.has(m.id)} onChange={() => toggle(m.id)} />
                       {m.full_name}
                     </label>
                     {!isTeacherMode && isNew && (
-                      <select
-                        className="field-input text-xs py-1 w-40 shrink-0"
+                      <FrequencyPicker
+                        selectClass="w-40"
                         value={perStudentFrequency[m.id] || ''}
-                        onChange={(e) => setFrequencyFor(m.id, e.target.value)}
-                      >
-                        <option value="">No invoice</option>
-                        {RECURRENCE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
+                        customMonths={perStudentCustom[m.id] || ''}
+                        onChange={(v) => setFrequencyFor(m.id, v)}
+                        onCustomChange={(v) => setPerStudentCustom((prev) => ({ ...prev, [m.id]: v }))}
+                      />
                     )}
                   </div>
                 )

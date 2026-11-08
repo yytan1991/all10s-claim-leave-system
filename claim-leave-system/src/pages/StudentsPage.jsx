@@ -9,6 +9,7 @@ import { Alert, EmptyState } from '../components/UI'
 import { QuickPayModal } from './InvoicesPage'
 import { generateInvoicePdf } from '../lib/invoicePdf'
 import BillingPromptModal from '../components/BillingPromptModal'
+import FrequencyPicker from '../components/FrequencyPicker'
 import { formatDate, getMonthGrid, toISODate, DAY_NAMES, formatTimeLabel, RECURRENCE_OPTIONS } from '../lib/helpers'
 
 function ageFrom(dob) {
@@ -444,7 +445,8 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
   const [lessonList, setLessonList] = useState([])
   const [enrolledIds, setEnrolledIds] = useState(new Set())
   const [checked, setChecked] = useState(new Set())
-  const [frequencies, setFrequencies] = useState({}) // lesson id -> months between invoices
+  const [frequencies, setFrequencies] = useState({}) // lesson id -> '' | '1' | '3' | '6' | '12' | 'custom'
+  const [customMonths, setCustomMonths] = useState({}) // lesson id -> number typed under Custom
   const [loadingLessons, setLoadingLessons] = useState(true)
   const [billingPrompt, setBillingPrompt] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -472,12 +474,24 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
     })
   }
 
+  // How many months between invoices for a lesson: a preset, or the number typed under Custom.
+  const monthsFor = (id) => (frequencies[id] === 'custom' ? Math.floor(Number(customMonths[id])) || 0 : Number(frequencies[id]))
+
   async function handleSave(e) {
     e.preventDefault()
     setError('')
     if (!fullName.trim()) {
       setError("Enter the student's name.")
       return
+    }
+    if (!archived) {
+      for (const id of [...checked].filter((x) => !enrolledIds.has(x))) {
+        if (frequencies[id] === 'custom' && !(monthsFor(id) >= 1 && monthsFor(id) <= 120)) {
+          const lessonName = lessonList.find((l) => l.id === id)?.name || 'this lesson'
+          setError(`Enter how many months the custom billing covers for ${lessonName} (a whole number from 1 to 120).`)
+          return
+        }
+      }
     }
     setSaving(true)
 
@@ -562,9 +576,9 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
             student_id: student.id,
             items: [{ description: lesson.name, amount: fee }],
             amount: fee,
-            recurrence_interval_months: Number(frequencies[id]),
+            recurrence_interval_months: monthsFor(id),
             next_generation_date: today,
-            next_invoice_month: computePeriodLabel(today, frequencies[id]),
+            next_invoice_month: computePeriodLabel(today, monthsFor(id)),
             created_by: createdBy,
           })
         })
@@ -664,8 +678,8 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
                   const isOn = checked.has(l.id)
                   const isNew = isOn && !enrolledIds.has(l.id)
                   return (
-                    <div key={l.id} className="flex items-center gap-3 rounded-md border border-sand-200 px-3 py-2">
-                      <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                    <div key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-sand-200 px-3 py-2">
+                      <label className="flex items-center gap-3 flex-1 min-w-[10rem] cursor-pointer">
                         <input type="checkbox" checked={isOn} onChange={() => toggle(l.id)} />
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-ink-900 truncate">{l.name}</span>
@@ -676,18 +690,12 @@ function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
                         </span>
                       </label>
                       {isNew && l.fee_amount != null && (
-                        <select
-                          className="field-input text-xs py-1 w-36 shrink-0"
+                        <FrequencyPicker
                           value={frequencies[l.id] || ''}
-                          onChange={(e) => setFrequencies((prev) => ({ ...prev, [l.id]: e.target.value }))}
-                        >
-                          <option value="">No invoice</option>
-                          {RECURRENCE_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
+                          customMonths={customMonths[l.id] || ''}
+                          onChange={(v) => setFrequencies((prev) => ({ ...prev, [l.id]: v }))}
+                          onCustomChange={(v) => setCustomMonths((prev) => ({ ...prev, [l.id]: v }))}
+                        />
                       )}
                     </div>
                   )

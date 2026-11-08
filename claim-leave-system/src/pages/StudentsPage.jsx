@@ -8,7 +8,7 @@ import DatePicker from '../components/DatePicker'
 import { Alert, EmptyState } from '../components/UI'
 import { QuickPayModal } from './InvoicesPage'
 import { generateInvoicePdf } from '../lib/invoicePdf'
-import { formatDate, getMonthGrid, toISODate } from '../lib/helpers'
+import { formatDate, getMonthGrid, toISODate, DAY_NAMES, formatTimeLabel, RECURRENCE_OPTIONS } from '../lib/helpers'
 
 function ageFrom(dob) {
   if (!dob) return null
@@ -248,7 +248,7 @@ export default function StudentsPage() {
       {detailsFor && (
         <StudentDetailsModal
           student={detailsFor}
-          lessons={classNames[detailsFor.id] || []}
+          createdBy={profile.id}
           onClose={() => setDetailsFor(null)}
           onSaved={() => {
             setDetailsFor(null)
@@ -421,14 +421,54 @@ function AddStudentModal({ orgId, createdBy, onClose, onSaved }) {
   )
 }
 
-function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
+// Same period wording as the Lessons page, e.g. "October 2026" or "October 2026 - December 2026"
+function computePeriodLabel(dateStr, intervalMonths) {
+  if (!dateStr) return ''
+  const start = new Date(`${dateStr}T00:00:00`)
+  const startLabel = start.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })
+  const months = Number(intervalMonths) || 1
+  if (months <= 1) return startLabel
+  const end = new Date(start)
+  end.setMonth(end.getMonth() + months - 1)
+  return `${startLabel} - ${end.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })}`
+}
+
+function StudentDetailsModal({ student, createdBy, onClose, onSaved }) {
+  const archived = Boolean(student.archived_at)
   const [fullName, setFullName] = useState(student.full_name || '')
   const [dob, setDob] = useState(student.date_of_birth || '')
   const [parentName, setParentName] = useState(student.parent_name || '')
   const [parentContact, setParentContact] = useState(student.parent_contact || '')
   const [parentEmail, setParentEmail] = useState(student.parent_email || '')
+  const [lessonList, setLessonList] = useState([])
+  const [enrolledIds, setEnrolledIds] = useState(new Set())
+  const [checked, setChecked] = useState(new Set())
+  const [frequencies, setFrequencies] = useState({}) // lesson id -> months between invoices
+  const [loadingLessons, setLoadingLessons] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('classes').select('*').eq('org_id', student.org_id).order('day_of_week').order('start_time'),
+      supabase.from('class_enrollments').select('class_id').eq('student_id', student.id),
+    ]).then(([{ data: lessonRows }, { data: enrolRows }]) => {
+      const ids = new Set((enrolRows || []).map((e) => e.class_id))
+      setLessonList(lessonRows || [])
+      setEnrolledIds(ids)
+      setChecked(new Set(ids))
+      setLoadingLessons(false)
+    })
+  }, [student.id, student.org_id])
+
+  function toggle(id) {
+    setChecked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -438,6 +478,7 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
       return
     }
     setSaving(true)
+
     const { error: updateError } = await supabase
       .from('students')
       .update({
@@ -448,11 +489,92 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
         parent_email: parentEmail.trim().toLowerCase() || null,
       })
       .eq('id', student.id)
-    setSaving(false)
     if (updateError) {
+      setSaving(false)
       setError(updateError.message)
       return
     }
+
+    if (!archived) {
+      const toAdd = [...checked].filter((id) => !enrolledIds.has(id))
+      const toRemove = [...enrolledIds].filter((id) => !checked.has(id))
+
+      if (toAdd.length > 0) {
+        const { error: addError } = await supabase
+          .from('class_enrollments')
+          .insert(toAdd.map((classId) => ({ org_id: student.org_id, class_id: classId, student_id: student.id, created_by: createdBy })))
+        if (addError) {
+          setSaving(false)
+          setError(addError.message)
+          return
+        }
+      }
+      if (toRemove.length > 0) {
+        const { error: removeError } = await supabase.from('class_enrollments').delete().eq('student_id', student.id).in('class_id', toRemove)
+        if (removeError) {
+          setSaving(false)
+          setError(removeError.message)
+          return
+        }
+      }
+
+      // Leaving a lesson shouldn't keep billing for it: offer to stop its recurring invoice too.
+      if (toRemove.length > 0) {
+        const removedNames = toRemove.map((id) => lessonList.find((l) => l.id === id)?.name).filter(Boolean)
+        const { data: plans } = await supabase.from('recurring_invoice_plans').select('id, items').eq('student_id', student.id)
+        const matching = (plans || []).filter((p) => removedNames.includes(p.items?.[0]?.description))
+        if (matching.length > 0) {
+          const names = [...new Set(matching.map((p) => p.items[0].description))].join(', ')
+          const stop = confirm(
+            `${student.full_name} has a recurring invoice for ${names}.\n\nStop it now that they have left the lesson?\n\nOK = stop the recurring invoice\nCancel = keep it`
+          )
+          if (stop) await supabase.from('recurring_invoice_plans').delete().in('id', matching.map((p) => p.id))
+        }
+      }
+
+      // Newly enrolled lessons with a billing option get a recurring invoice at the lesson's fee —
+      // unless this student already has a recurring invoice for that lesson.
+      const wanted = toAdd.filter((id) => frequencies[id])
+      if (wanted.length > 0) {
+        const { data: existingPlans } = await supabase.from('recurring_invoice_plans').select('items').eq('student_id', student.id)
+        const existingNames = new Set((existingPlans || []).map((p) => p.items?.[0]?.description))
+        const today = toISODate(new Date())
+        const rows = []
+        const skipped = []
+        wanted.forEach((id) => {
+          const lesson = lessonList.find((l) => l.id === id)
+          if (!lesson) return
+          if (existingNames.has(lesson.name)) {
+            skipped.push(lesson.name)
+            return
+          }
+          const fee = Number(lesson.fee_amount || 0)
+          rows.push({
+            org_id: student.org_id,
+            student_id: student.id,
+            items: [{ description: lesson.name, amount: fee }],
+            amount: fee,
+            recurrence_interval_months: Number(frequencies[id]),
+            next_generation_date: today,
+            next_invoice_month: computePeriodLabel(today, frequencies[id]),
+            created_by: createdBy,
+          })
+        })
+        if (rows.length > 0) {
+          const { error: planError } = await supabase.from('recurring_invoice_plans').insert(rows)
+          if (planError) {
+            setSaving(false)
+            setError(`Lessons were saved, but creating the recurring invoice failed: ${planError.message}`)
+            return
+          }
+        }
+        if (skipped.length > 0) {
+          alert(`${student.full_name} already has a recurring invoice for ${skipped.join(', ')}, so no new one was created.`)
+        }
+      }
+    }
+
+    setSaving(false)
     onSaved()
   }
 
@@ -460,7 +582,7 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
     <Modal title="Student details" onClose={onClose} xl>
       <form onSubmit={handleSave} className="space-y-6">
         {error && <Alert tone="rose">{error}</Alert>}
-        {student.archived_at && <Alert tone="amber">This student is archived (since {formatDate(student.archived_at.slice(0, 10))}).</Alert>}
+        {archived && <Alert tone="amber">This student is archived (since {formatDate(student.archived_at.slice(0, 10))}).</Alert>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           <div className="space-y-4">
@@ -472,13 +594,6 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
             <div>
               <label className="field-label">Date of birth</label>
               <DatePicker value={dob} onChange={setDob} maxDate={toISODate(new Date())} />
-            </div>
-            <div>
-              <label className="field-label">Enrolled lessons</label>
-              <div className="rounded-md bg-sand-50 px-3 py-2 text-sm text-ink-700">
-                {lessons.length ? lessons.join(', ') : 'Not enrolled in any lesson'}
-              </div>
-              <p className="text-xs text-ink-500 mt-1">To change lessons, use Lessons → Edit → Students.</p>
             </div>
           </div>
 
@@ -499,6 +614,60 @@ function StudentDetailsModal({ student, lessons, onClose, onSaved }) {
               </div>
             </div>
           </div>
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <h4 className="text-sm font-semibold text-ink-900">Enrolled lessons</h4>
+            <p className="text-xs text-ink-500">{checked.size} selected</p>
+          </div>
+          {archived ? (
+            <p className="text-sm text-ink-500">Restore this student to change their lessons.</p>
+          ) : loadingLessons ? (
+            <p className="text-sm text-ink-500">Loading…</p>
+          ) : lessonList.length === 0 ? (
+            <p className="text-sm text-ink-500">No lessons yet. Create them on the Lessons page.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                {lessonList.map((l) => {
+                  const isOn = checked.has(l.id)
+                  const isNew = isOn && !enrolledIds.has(l.id)
+                  return (
+                    <div key={l.id} className="flex items-center gap-3 rounded-md border border-sand-200 px-3 py-2">
+                      <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                        <input type="checkbox" checked={isOn} onChange={() => toggle(l.id)} />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-ink-900 truncate">{l.name}</span>
+                          <span className="block text-xs text-ink-500">
+                            {DAY_NAMES[l.day_of_week]} · {formatTimeLabel(l.start_time)} – {formatTimeLabel(l.end_time)}
+                            {l.fee_amount != null ? ` · RM ${Number(l.fee_amount).toFixed(2)}` : ''}
+                          </span>
+                        </span>
+                      </label>
+                      {isNew && l.fee_amount != null && (
+                        <select
+                          className="field-input text-xs py-1 w-36 shrink-0"
+                          value={frequencies[l.id] || ''}
+                          onChange={(e) => setFrequencies((prev) => ({ ...prev, [l.id]: e.target.value }))}
+                        >
+                          <option value="">No invoice</option>
+                          {RECURRENCE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-ink-500 mt-2">
+                Tick to enrol, untick to remove. Beside a newly ticked lesson you can start a recurring invoice at that lesson's fee.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="flex gap-3 pt-4 border-t border-sand-100">

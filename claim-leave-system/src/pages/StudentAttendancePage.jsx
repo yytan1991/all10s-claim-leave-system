@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList, CheckCheck } from 'lucide-react'
+import { ClipboardList, CheckCheck, Download } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import { Alert, EmptyState } from '../components/UI'
 import DatePicker from '../components/DatePicker'
+import ExportAttendanceModal from '../components/ExportAttendanceModal'
 import { formatDate } from '../lib/helpers'
 
 // classes.day_of_week uses 0 = Monday ... 6 = Sunday. JS Date#getDay() uses
@@ -64,6 +65,7 @@ export default function StudentAttendancePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [savedMessage, setSavedMessage] = useState('')
+  const [exportOpen, setExportOpen] = useState(false)
 
   useEffect(() => {
     if (profile) loadClasses()
@@ -286,6 +288,13 @@ export default function StudentAttendancePage() {
 
   return (
     <AppLayout title="Student Attendance" subtitle="Mark attendance for a lesson on a specific date.">
+      {isAdmin && allClasses.length > 0 && (
+        <div className="flex justify-end mb-3">
+          <button type="button" onClick={() => setExportOpen(true)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
+            <Download size={14} /> Export attendance
+          </button>
+        </div>
+      )}
       <div className={`card p-5 mb-6 grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <div>
           <label className="field-label">Lesson</label>
@@ -444,6 +453,10 @@ export default function StudentAttendancePage() {
             {saving ? 'Saving…' : 'Save attendance'}
           </button>
         </div>
+      )}
+
+      {exportOpen && (
+        <ExportAttendanceModal lessons={allClasses} defaultLessonId={classId} orgId={profile.org_id} onClose={() => setExportOpen(false)} />
       )}
     </AppLayout>
   )

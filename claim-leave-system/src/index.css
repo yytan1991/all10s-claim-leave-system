@@ -7,7 +7,7 @@
     -webkit-font-smoothing: antialiased;
   }
   body {
-    @apply bg-sand-50 text-ink-900 font-body;
+    @apply bg-app bg-fixed text-ink-900 font-body;
   }
   h1, h2, h3 {
     @apply font-display text-ink-900;
@@ -16,18 +16,18 @@
 
 @layer components {
   .card {
-    @apply bg-white border border-sand-200 rounded-card shadow-card;
+    @apply bg-white border border-white rounded-card shadow-card;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium
-      transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium
+      transition disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn bg-accent text-white shadow-sm hover:brightness-95;
   }
   .btn-secondary {
-    @apply btn bg-white text-ink-700 border border-sand-200 hover:bg-sand-100;
+    @apply btn bg-white text-ink-700 border border-sand-200 hover:bg-sand-50;
   }
   .btn-danger {
     @apply btn bg-rose-50 text-rose-600 hover:bg-rose-100;
@@ -37,7 +37,7 @@
     @apply block text-sm font-medium text-ink-700 mb-1.5;
   }
   .field-input {
-    @apply w-full rounded-md border border-sand-200 bg-white px-3 py-2 text-sm text-ink-900
+    @apply w-full rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm text-ink-900
       placeholder:text-ink-500/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500;
   }
 
@@ -57,11 +57,21 @@
     @apply badge bg-sand-100 text-ink-500;
   }
 
+  /* sidebar menu items */
   .nav-link {
-    @apply flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-white/70
-      hover:bg-white/10 hover:text-white transition-colors;
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium text-ink-700
+      hover:bg-white hover:text-ink-900 transition-colors;
   }
   .nav-link-active {
-    @apply nav-link bg-white/15 text-white;
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold text-white bg-accent shadow-pill;
+  }
+
+  /* the row of page tabs along the top of each page */
+  .tab-pill {
+    @apply inline-flex items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium text-ink-700
+      hover:bg-white transition-colors;
+  }
+  .tab-pill-active {
+    @apply inline-flex items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-white bg-accent shadow-pill;
   }
 }

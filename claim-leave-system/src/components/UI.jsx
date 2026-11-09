@@ -7,22 +7,24 @@ export function StatusPill({ status }) {
 
 export function StatCard({ label, value, hint, icon: Icon, tone = 'brand' }) {
   const toneClasses = {
-    brand: 'bg-brand-50 text-brand-700',
+    brand: 'bg-brand-50 text-brand-600',
     amber: 'bg-amber-50 text-amber-600',
     rose: 'bg-rose-50 text-rose-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    sky: 'bg-sky-50 text-sky-600',
   }
   return (
-    <div className="card p-5 flex items-start justify-between">
-      <div>
-        <p className="text-sm text-ink-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold font-display">{value}</p>
-        {hint && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
-      </div>
+    <div className="card flex items-center gap-4 p-4">
       {Icon && (
-        <div className={`rounded-full p-2.5 ${toneClasses[tone]}`}>
-          <Icon size={18} />
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${toneClasses[tone] || toneClasses.brand}`}>
+          <Icon size={22} />
         </div>
       )}
+      <div className="min-w-0">
+        <p className="font-display text-2xl font-semibold leading-tight">{value}</p>
+        <p className="truncate text-sm text-ink-500">{label}</p>
+        {hint && <p className="mt-0.5 text-xs text-ink-500/80">{hint}</p>}
+      </div>
     </div>
   )
 }
@@ -48,7 +50,7 @@ export function Alert({ tone = 'brand', children }) {
     amber: 'bg-amber-50 text-amber-600 border-amber-100',
   }
   return (
-    <div className={`rounded-md border px-3.5 py-2.5 text-sm ${toneClasses[tone]}`}>
+    <div className={`rounded-xl border px-3.5 py-2.5 text-sm ${toneClasses[tone]}`}>
       {children}
     </div>
   )

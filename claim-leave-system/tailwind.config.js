@@ -39,10 +39,16 @@ export default {
         body: ['"Inter"', 'sans-serif'],
       },
       borderRadius: {
-        card: '10px',
+        card: '18px',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(18, 33, 43, 0.06), 0 1px 0 rgba(18, 33, 43, 0.04)',
+        card: '0 8px 28px rgba(160, 80, 40, 0.07), 0 1px 3px rgba(160, 80, 40, 0.06)',
+        pill: '0 8px 18px rgba(205, 91, 21, 0.30)',
+      },
+      backgroundImage: {
+        // soft warm page background, and the brand gradient used for the active menu item and main buttons
+        app: 'linear-gradient(135deg, #FFF6EE 0%, #FDEDEE 50%, #F8EFF5 100%)',
+        accent: 'linear-gradient(135deg, #EB8A3F 0%, #D2501F 55%, #B8301F 100%)',
       },
     },
   },

@@ -4,7 +4,14 @@ import { Plus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
-import { formatDate, initials, isOverdue } from '../lib/helpers'
+import { initials, isOverdue } from '../lib/helpers'
+
+// "30 Sep" (with the year only when it isn't this year): short enough for a narrow card.
+function shortDate(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`)
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: '2-digit' }) })
+}
 
 export default function CrmPipelineBoard() {
   const { profile } = useAuth()
@@ -15,6 +22,7 @@ export default function CrmPipelineBoard() {
 
   useEffect(() => {
     if (profile) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.org_id])
 
   async function load() {
@@ -44,78 +52,83 @@ export default function CrmPipelineBoard() {
 
   if (loading) {
     return (
-      <AppLayout title="Pipeline board" subtitle="Drag leads between stages.">
+      <AppLayout title="Pipeline board" subtitle="Drag a lead's card to move it between stages.">
         <p className="text-sm text-ink-500">Loading…</p>
       </AppLayout>
     )
   }
 
   return (
-    <AppLayout title="Pipeline board" subtitle="Drag a lead's card to move it between stages.">
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {stages.map((stage) => {
-          const stageContacts = contacts.filter((c) => c.stage_id === stage.id)
-          const isOver = dragOverStage === stage.id
-          return (
-            <div
-              key={stage.id}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragOverStage(stage.id)
-              }}
-              onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
-              onDrop={(e) => handleDrop(e, stage.id)}
-              className={`flex-shrink-0 w-72 rounded-card border ${
-                isOver ? 'border-brand-500 bg-brand-50/40' : 'border-sand-200 bg-sand-100/60'
-              }`}
-            >
-              <div className="flex items-center justify-between px-3 py-2.5 border-b border-sand-200">
-                <p className="text-sm font-semibold text-ink-900">{stage.name}</p>
-                <span className="text-xs text-ink-500 bg-white rounded-full px-2 py-0.5">
-                  {stageContacts.length}
-                </span>
-              </div>
-
-              <div className="p-2 space-y-2 min-h-[120px]">
-                {stageContacts.map((c) => {
-                  const overdue = isOverdue(c.next_followup_date) && !stage.is_won && !stage.is_lost
-                  return (
-                    <Link
-                      key={c.id}
-                      to={`/crm/leads/${c.id}`}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/plain', c.id)}
-                      className="block card p-3 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
-                    >
-                      <p className="text-sm font-medium text-ink-900 truncate">{c.parent_name}</p>
-                      {c.student_name && (
-                        <p className="text-xs text-ink-500 truncate">{c.student_name}</p>
-                      )}
-                      <div className="flex items-center justify-between mt-2">
-                        <span className={`text-xs ${overdue ? 'text-rose-600 font-medium' : 'text-ink-500'}`}>
-                          {c.next_followup_date ? formatDate(c.next_followup_date) : '—'}
-                        </span>
-                        {c.profiles?.full_name && (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-[10px] font-semibold">
-                            {initials(c.profiles.full_name)}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-
-        <Link
-          to="/crm/leads/new"
-          className="flex-shrink-0 w-16 flex items-center justify-center rounded-card border-2 border-dashed border-sand-200 text-ink-500 hover:border-brand-500 hover:text-brand-600 transition-colors"
-        >
-          <Plus size={20} />
+    <AppLayout
+      title="Pipeline board"
+      subtitle="Drag a lead's card to move it between stages."
+      actions={
+        <Link to="/crm/leads/new" className="btn-primary text-xs">
+          <Plus size={14} /> New lead
         </Link>
-      </div>
+      }
+    >
+      {stages.length === 0 ? (
+        <p className="text-sm text-ink-500">No pipeline stages have been set up yet.</p>
+      ) : (
+        // The stages share the width of the page, so the whole board is visible at once. Only if there are so many
+        // stages that each would get squeezed below about 7.5rem does it scroll sideways.
+        <div data-board className="grid auto-cols-[minmax(7.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-2">
+          {stages.map((stage) => {
+            const stageContacts = contacts.filter((c) => c.stage_id === stage.id)
+            const isOver = dragOverStage === stage.id
+            const accent = stage.is_won ? 'border-emerald-400' : stage.is_lost ? 'border-rose-400' : 'border-brand-300'
+            return (
+              <div
+                key={stage.id}
+                data-stage={stage.name}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragOverStage(stage.id)
+                }}
+                onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
+                onDrop={(e) => handleDrop(e, stage.id)}
+                className={`flex min-w-0 flex-col rounded-2xl border-t-4 shadow-card ${accent} ${isOver ? 'bg-brand-50' : 'bg-white/60'}`}
+              >
+                <div className="flex items-start justify-between gap-1 px-2 pb-1.5 pt-2">
+                  <p className="break-words text-xs font-semibold leading-tight text-ink-900">{stage.name}</p>
+                  <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[11px] leading-none text-ink-500">{stageContacts.length}</span>
+                </div>
+
+                {/* each stage scrolls up and down by itself if it has many leads */}
+                <div className="max-h-[calc(100vh-17rem)] min-h-[8rem] space-y-1.5 overflow-y-auto p-1.5">
+                  {stageContacts.map((c) => {
+                    const overdue = isOverdue(c.next_followup_date) && !stage.is_won && !stage.is_lost
+                    return (
+                      <Link
+                        key={c.id}
+                        to={`/crm/leads/${c.id}`}
+                        draggable
+                        onDragStart={(e) => e.dataTransfer.setData('text/plain', c.id)}
+                        title={[c.parent_name, c.student_name].filter(Boolean).join(' · ')}
+                        className="card block cursor-grab p-2 transition-shadow hover:shadow-md active:cursor-grabbing"
+                      >
+                        <p className="truncate text-[13px] font-medium leading-snug text-ink-900">{c.parent_name}</p>
+                        {c.student_name && <p className="truncate text-xs text-ink-500">{c.student_name}</p>}
+                        <div className="mt-1.5 flex items-center justify-between gap-1">
+                          <span className={`text-[11px] ${overdue ? 'font-medium text-rose-600' : 'text-ink-500'}`}>
+                            {c.next_followup_date ? shortDate(c.next_followup_date) : '—'}
+                          </span>
+                          {c.profiles?.full_name && (
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
+                              {initials(c.profiles.full_name)}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </AppLayout>
   )
 }

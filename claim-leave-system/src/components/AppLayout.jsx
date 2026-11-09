@@ -9,7 +9,8 @@ import { applyDensity } from '../lib/density'
 // Apply the saved text size as soon as the app loads, so there is no flash of the larger size.
 applyDensity()
 
-export default function AppLayout({ title, subtitle, children }) {
+// `actions` (optional) puts buttons on the right of the title row, e.g. a "New lead" button.
+export default function AppLayout({ title, subtitle, actions, children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -34,9 +35,12 @@ export default function AppLayout({ title, subtitle, children }) {
         <Topbar />
         <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pb-24 md:px-6 md:pb-6">
           <ModuleTabs />
-          <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-            <h1 className="text-lg font-semibold">{title}</h1>
-            {subtitle && <p className="text-xs text-ink-500">{subtitle}</p>}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <h1 className="text-lg font-semibold">{title}</h1>
+              {subtitle && <p className="text-xs text-ink-500">{subtitle}</p>}
+            </div>
+            {actions && <div className="flex items-center gap-2">{actions}</div>}
           </div>
           {children}
         </main>

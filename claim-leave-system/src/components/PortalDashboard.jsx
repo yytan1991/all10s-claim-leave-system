@@ -80,10 +80,12 @@ function fmtDateTime(iso) {
   return `${date}, ${time}`
 }
 
-// When a lesson has two attendance marks in one day, say which one a row is.
+// When a lesson has several attendance marks in one day, say which one a row is.
+const ORDINALS = ['1st', '2nd', '3rd']
 function sessionNote(row, rows) {
-  if (row.session_no === 2) return '2nd attendance'
-  if (row.session_no === 1 && rows.some((o) => o.class_id === row.class_id && o.attendance_date === row.attendance_date && o.session_no === 2)) return '1st attendance'
+  const n = row.session_no || 1
+  if (n > 1) return `${ORDINALS[n - 1]} attendance`
+  if (rows.some((o) => o.class_id === row.class_id && o.attendance_date === row.attendance_date && (o.session_no || 1) > 1)) return '1st attendance'
   return ''
 }
 

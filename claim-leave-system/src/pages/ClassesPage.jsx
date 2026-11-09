@@ -142,10 +142,10 @@ export default function ClassesPage() {
                   <tr key={c.id}>
                     <td className="px-5 py-3 font-medium text-ink-900">
                       {c.name}
-                      {(c.uses_credits || c.attendance_marks_per_day === 2) && (
+                      {(c.uses_credits || c.attendance_marks_per_day > 1) && (
                         <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                           {c.uses_credits && <span className="rounded-full bg-brand-50 text-brand-700 text-[11px] px-2 py-0.5 font-medium">Credits</span>}
-                          {c.attendance_marks_per_day === 2 && <span className="rounded-full bg-sky-50 text-sky-700 text-[11px] px-2 py-0.5 font-medium">2 marks/day</span>}
+                          {c.attendance_marks_per_day > 1 && <span className="rounded-full bg-sky-50 text-sky-700 text-[11px] px-2 py-0.5 font-medium">{c.attendance_marks_per_day} marks/day</span>}
                         </span>
                       )}
                     </td>
@@ -210,7 +210,7 @@ export default function ClassesPage() {
 // Settings added by migration 44. They are only sent when they matter, so the page keeps working
 // even before that SQL has been run.
 function lessonSettingsPayload({ marksPerDay, usesCredits, creditsPerPackage }, existing) {
-  const marks = Number(marksPerDay) === 2 ? 2 : 1
+  const marks = [2, 3].includes(Number(marksPerDay)) ? Number(marksPerDay) : 1
   const hasColumns = Boolean(existing) && 'uses_credits' in existing
   const payload = {}
   if (hasColumns || marks !== 1) payload.attendance_marks_per_day = marks
@@ -237,6 +237,7 @@ function LessonSettingsFields({ marksPerDay, setMarksPerDay, usesCredits, setUse
         <select className="field-input" value={marksPerDay} onChange={(e) => setMarksPerDay(e.target.value)}>
           <option value="1">Once a day</option>
           <option value="2">Twice a day (a student may attend 2 sessions)</option>
+          <option value="3">Three times a day (a student may attend 3 sessions)</option>
         </select>
       </div>
       <div className="rounded-md border border-sand-200 p-3">

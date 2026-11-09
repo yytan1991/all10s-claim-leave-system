@@ -77,11 +77,11 @@ export default function StudentDashboard() {
     if (!attendanceByClass[key]) attendanceByClass[key] = { present: 0, absent: 0, late: 0 }
     attendanceByClass[key][a.status] = (attendanceByClass[key][a.status] || 0) + 1
   })
-  // A lesson with two attendance marks a day gets a line for each.
+  // A lesson with several attendance marks a day gets a line for each.
   const attendanceRows = classesToday.flatMap((c) =>
-    (c.attendance_marks_per_day === 2 ? [1, 2] : [1]).map((n) => ({
+    Array.from({ length: c.attendance_marks_per_day || 1 }, (_, i) => i + 1).map((n) => ({
       key: `${c.id}:${n}`,
-      name: c.attendance_marks_per_day === 2 ? `${c.name} · ${n === 1 ? '1st' : '2nd'} attendance` : c.name,
+      name: (c.attendance_marks_per_day || 1) > 1 ? `${c.name} · ${['1st', '2nd', '3rd'][n - 1]} attendance` : c.name,
       counts: attendanceByClass[`${c.id}:${n}`] || {},
     }))
   )

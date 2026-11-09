@@ -1,10 +1,10 @@
 -- =========================================================
--- ALL10S ERP / WiiTeam — Lesson credits + two attendance marks a day (migration 44)
+-- ALL10S ERP / WiiTeam — Lesson credits + up to three attendance marks a day (migration 44)
 --
 --  * A lesson can be set to "uses credits" (e.g. Foundation class = 12 credits).
 --    Every time a student is marked Present or Late, 1 credit is deducted automatically.
 --    Absent does not deduct. Changing or removing a mark returns the credit.
---  * A lesson can allow two attendance marks per day (session 1 and session 2).
+--  * A lesson can allow up to three attendance marks per day (sessions 1, 2 and 3).
 --  * Every change to a student's credits is kept in student_credit_ledger, with the
 --    date and time, so staff can see the history and parents can see when credits were used.
 --  * Admins add or deduct credits by hand (rows of kind manual_add / manual_deduct).
@@ -18,20 +18,20 @@ alter table classes add column if not exists credits_per_package integer not nul
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'classes_attendance_marks_per_day_check') then
-    alter table classes add constraint classes_attendance_marks_per_day_check check (attendance_marks_per_day in (1, 2));
+    alter table classes add constraint classes_attendance_marks_per_day_check check (attendance_marks_per_day in (1, 2, 3));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'classes_credits_per_package_check') then
     alter table classes add constraint classes_credits_per_package_check check (credits_per_package > 0);
   end if;
 end $$;
 
--- ---------- 2. Attendance: a session number, so a student can be marked twice in one day ----------
+-- ---------- 2. Attendance: a session number, so a student can be marked more than once in one day ----------
 alter table student_attendance add column if not exists session_no smallint not null default 1;
 
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'student_attendance_session_no_check') then
-    alter table student_attendance add constraint student_attendance_session_no_check check (session_no in (1, 2));
+    alter table student_attendance add constraint student_attendance_session_no_check check (session_no in (1, 2, 3));
   end if;
 end $$;
 

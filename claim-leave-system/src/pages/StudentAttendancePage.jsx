@@ -28,6 +28,8 @@ function formatTime(isoString) {
   return new Date(isoString).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' })
 }
 
+const ORDINALS = ['1st', '2nd', '3rd']
+
 // Present and Late both mean the student attended, so both use up a credit. Absent does not.
 const usesUpCredit = (status) => status === 'present' || status === 'late'
 
@@ -100,8 +102,8 @@ export default function StudentAttendancePage() {
   const sessionAware = Boolean(selectedClass) && 'attendance_marks_per_day' in selectedClass
   const marksPerDay = sessionAware ? selectedClass.attendance_marks_per_day || 1 : 1
   const usesCredits = Boolean(selectedClass?.uses_credits)
-  const activeSession = marksPerDay === 2 ? session : 1
-  const sessionWord = marksPerDay === 2 ? (activeSession === 1 ? ' (1st attendance)' : ' (2nd attendance)') : ''
+  const activeSession = marksPerDay > 1 ? Math.min(session, marksPerDay) : 1
+  const sessionWord = marksPerDay > 1 ? ` (${ORDINALS[activeSession - 1]} attendance)` : ''
 
   useEffect(() => {
     if (!isAdmin) {
@@ -318,17 +320,17 @@ export default function StudentAttendancePage() {
         )}
       </div>
 
-      {marksPerDay === 2 && classId && (
+      {marksPerDay > 1 && classId && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-ink-700">This lesson has two attendance marks a day. Marking:</span>
-          {[1, 2].map((n) => (
+          <span className="text-sm text-ink-700">This lesson has {marksPerDay} attendance marks a day. Marking:</span>
+          {Array.from({ length: marksPerDay }, (_, i) => i + 1).map((n) => (
             <button
               key={n}
               type="button"
               onClick={() => switchSession(n)}
               className={activeSession === n ? 'btn-primary text-xs' : 'btn-secondary text-xs'}
             >
-              {n === 1 ? '1st attendance' : '2nd attendance'}
+              {ORDINALS[n - 1]} attendance
             </button>
           ))}
         </div>

@@ -336,10 +336,10 @@ function HistoryModal({ student, lesson, onClose }) {
       })
   }, [lesson.id, student.id])
 
-  const twice = lesson?.attendance_marks_per_day === 2
+  const multi = lesson?.attendance_marks_per_day > 1
   function eventLabel(e) {
     if (e.kind === 'attendance') {
-      const session = twice ? ` · ${e.session_no === 2 ? '2nd' : '1st'} attendance` : ''
+      const session = multi ? ` · ${['1st', '2nd', '3rd'][(e.session_no || 1) - 1]} attendance` : ''
       return `Attended class${e.attendance_date ? ` on ${fmtDate(e.attendance_date)}` : ''}${session}`
     }
     if (e.kind === 'attendance_undo') return `Credit returned${e.note ? ` (${e.note.toLowerCase()})` : ''}`

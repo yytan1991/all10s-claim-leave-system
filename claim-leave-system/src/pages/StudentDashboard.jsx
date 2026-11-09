@@ -37,7 +37,7 @@ export default function StudentDashboard() {
       { data: attendanceData },
     ] = await Promise.all([
       supabase.from('students').select('id').eq('org_id', profile.org_id),
-      supabase.from('classes').select('id, name, day_of_week').eq('org_id', profile.org_id),
+      supabase.from('classes').select('*').eq('org_id', profile.org_id),
       supabase.from('class_teachers').select('teacher_id').eq('org_id', profile.org_id),
       supabase
         .from('student_invoices')
@@ -45,7 +45,7 @@ export default function StudentDashboard() {
         .eq('org_id', profile.org_id),
       supabase
         .from('student_attendance')
-        .select('class_id, status')
+        .select('*')
         .eq('org_id', profile.org_id)
         .eq('attendance_date', today),
     ])
@@ -73,9 +73,18 @@ export default function StudentDashboard() {
   const classesToday = classes.filter((c) => c.day_of_week === todayAppDow())
   const attendanceByClass = {}
   todayAttendance.forEach((a) => {
-    if (!attendanceByClass[a.class_id]) attendanceByClass[a.class_id] = { present: 0, absent: 0, late: 0 }
-    attendanceByClass[a.class_id][a.status] = (attendanceByClass[a.class_id][a.status] || 0) + 1
+    const key = `${a.class_id}:${a.session_no || 1}`
+    if (!attendanceByClass[key]) attendanceByClass[key] = { present: 0, absent: 0, late: 0 }
+    attendanceByClass[key][a.status] = (attendanceByClass[key][a.status] || 0) + 1
   })
+  // A lesson with two attendance marks a day gets a line for each.
+  const attendanceRows = classesToday.flatMap((c) =>
+    (c.attendance_marks_per_day === 2 ? [1, 2] : [1]).map((n) => ({
+      key: `${c.id}:${n}`,
+      name: c.attendance_marks_per_day === 2 ? `${c.name} · ${n === 1 ? '1st' : '2nd'} attendance` : c.name,
+      counts: attendanceByClass[`${c.id}:${n}`] || {},
+    }))
+  )
 
   // Sales (total billed) and pending collection, grouped by invoice issue
   // month, last 6 months.
@@ -119,11 +128,11 @@ export default function StudentDashboard() {
             <p className="text-sm text-ink-500">No lessons scheduled today.</p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {classesToday.map((c) => {
-                const counts = attendanceByClass[c.id] || {}
+              {attendanceRows.map((row) => {
+                const counts = row.counts
                 return (
-                  <div key={c.id} className="flex items-center justify-between px-1 py-1.5 text-sm">
-                    <span className="text-ink-900">{c.name}</span>
+                  <div key={row.key} className="flex items-center justify-between px-1 py-1.5 text-sm">
+                    <span className="text-ink-900">{row.name}</span>
                     <span className="text-xs text-ink-500">
                       {counts.present || 0} present · {counts.absent || 0} absent · {counts.late || 0} late
                     </span>

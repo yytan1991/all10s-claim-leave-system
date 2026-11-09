@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp, BookOpen, ClipboardCheck, TrendingUp } from 'lucide-react'
+import { Megaphone, ClipboardList, Receipt, CalendarClock, Download, ChevronDown, ChevronUp, BookOpen, ClipboardCheck, TrendingUp, Coins } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import MaterialView from './MaterialView'
 import StudentPractice from './StudentPractice'
@@ -71,7 +71,34 @@ function statusBadge(status) {
 }
 
 // canDownload: parents can download invoice / receipt PDFs; the student view is read-only.
-export default function PortalDashboard({ student, canDownload = false, showInvoices = true, showLearning = false, showPractice = false, showProgress = false }) {
+// "30 October 2026, 2:00 PM"
+function fmtDateTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' }).replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
+  return `${date}, ${time}`
+}
+
+// When a lesson has two attendance marks in one day, say which one a row is.
+function sessionNote(row, rows) {
+  if (row.session_no === 2) return '2nd attendance'
+  if (row.session_no === 1 && rows.some((o) => o.class_id === row.class_id && o.attendance_date === row.attendance_date && o.session_no === 2)) return '1st attendance'
+  return ''
+}
+
+function creditEvent(r, rows) {
+  if (r.kind === 'attendance') {
+    const sess = sessionNote(r, rows)
+    const day = r.attendance_date ? ` on ${new Date(`${r.attendance_date}T00:00:00`).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''
+    return `Attended class${day}${sess ? ` (${sess})` : ''} · credit used`
+  }
+  if (r.kind === 'attendance_undo') return 'Credit returned (attendance corrected)'
+  if (r.kind === 'manual_add') return 'Credits added by the centre'
+  return 'Credits adjusted by the centre'
+}
+
+export default function PortalDashboard({ student, canDownload = false, showInvoices = true, showLearning = false, showPractice = false, showProgress = false, showCredits = false }) {
   const [tab, setTab] = useState('announcements')
   const [announcements, setAnnouncements] = useState([])
   const [attendance, setAttendance] = useState([])
@@ -79,6 +106,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
   const [paymentsByInvoice, setPaymentsByInvoice] = useState({})
   const [classes, setClasses] = useState([])
   const [materials, setMaterials] = useState([])
+  const [creditRows, setCreditRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [expandedInvoiceId, setExpandedInvoiceId] = useState(null)
   const [downloadingId, setDownloadingId] = useState(null)
@@ -91,7 +119,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
 
   async function load() {
     setLoading(true)
-    const [{ data: ann }, { data: att }, { data: inv }, { data: enroll }, { data: mats }] = await Promise.all([
+    const [{ data: ann }, { data: att }, { data: inv }, { data: enroll }, { data: mats }, { data: credits }] = await Promise.all([
       supabase
         .from('announcements')
         .select('*')
@@ -115,6 +143,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
       showLearning
         ? supabase.from('learning_materials').select('*, classes(name)').order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
+      showCredits ? supabase.rpc('portal_credit_history', { p_student_id: student.id }) : Promise.resolve({ data: [] }),
     ])
 
     const invoiceList = inv || []
@@ -140,6 +169,7 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
     setPaymentsByInvoice(payMap)
     setClasses((enroll || []).map((e) => e.classes).filter(Boolean))
     setMaterials(mats || [])
+    setCreditRows(credits || [])
     setLoading(false)
   }
 
@@ -172,9 +202,19 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
     showLearning && { key: 'learning', label: 'Learning', icon: BookOpen },
     showPractice && { key: 'practice', label: 'Practice & Quizzes', icon: ClipboardCheck },
     { key: 'attendance', label: 'Attendance', icon: ClipboardList },
+    showCredits && creditRows.length > 0 && { key: 'credits', label: 'Credits', icon: Coins },
     { key: 'invoices', label: 'Invoices', icon: Receipt },
     { key: 'schedule', label: 'Lesson Schedule', icon: CalendarClock },
   ].filter((t) => t && (showInvoices || t.key !== 'invoices'))
+
+  // Credits left per lesson, from the history
+  const creditSummary = Object.values(
+    creditRows.reduce((acc, r) => {
+      if (!acc[r.class_id]) acc[r.class_id] = { classId: r.class_id, name: r.class_name, balance: 0 }
+      acc[r.class_id].balance += Number(r.delta)
+      return acc
+    }, {})
+  )
 
   // Learning materials grouped by class
   const materialsByClass = {}
@@ -287,7 +327,10 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
                   <tbody className="divide-y divide-sand-100">
                     {attendance.map((a) => (
                       <tr key={a.id}>
-                        <td className="px-5 py-3 text-ink-900">{formatDate(a.attendance_date)}</td>
+                        <td className="px-5 py-3 text-ink-900">
+                          {formatDate(a.attendance_date)}
+                          {sessionNote(a, attendance) && <span className="block text-xs text-ink-500">{sessionNote(a, attendance)}</span>}
+                        </td>
                         <td className="px-5 py-3 text-ink-700">{a.classes?.name || '—'}</td>
                         <td className="px-5 py-3">{statusBadge(a.status)}</td>
                       </tr>
@@ -295,6 +338,51 @@ export default function PortalDashboard({ student, canDownload = false, showInvo
                   </tbody>
                 </table>
               )}
+            </div>
+          )}
+
+          {tab === 'credits' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {creditSummary.map((c) => (
+                  <div key={c.classId} className="card p-4">
+                    <p className="text-sm text-ink-500">{c.name}</p>
+                    <p className={`text-2xl font-semibold ${c.balance <= 0 ? 'text-rose-600' : c.balance <= 2 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                      {c.balance} <span className="text-sm font-normal text-ink-500">credit{c.balance === 1 ? '' : 's'} left</span>
+                    </p>
+                    {c.balance <= 2 && <p className="text-xs text-amber-700 mt-1">Running low. Please contact the centre to top up.</p>}
+                  </div>
+                ))}
+              </div>
+              <div className="card overflow-hidden">
+                <div className="px-5 py-3 border-b border-sand-100">
+                  <h3 className="font-semibold text-ink-900 text-sm">Credit history</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-sm">
+                    <thead className="bg-sand-100 text-ink-500 text-left">
+                      <tr>
+                        <th className="px-5 py-3 font-medium">Date and time</th>
+                        <th className="px-5 py-3 font-medium">Lesson</th>
+                        <th className="px-5 py-3 font-medium">What happened</th>
+                        <th className="px-5 py-3 font-medium">Credits</th>
+                        <th className="px-5 py-3 font-medium">Left after</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-sand-100">
+                      {creditRows.map((r) => (
+                        <tr key={r.id}>
+                          <td className="px-5 py-3 text-ink-900 whitespace-nowrap">{fmtDateTime(r.occurred_at)}</td>
+                          <td className="px-5 py-3 text-ink-700">{r.class_name}</td>
+                          <td className="px-5 py-3 text-ink-700">{creditEvent(r, creditRows)}</td>
+                          <td className={`px-5 py-3 font-medium ${r.delta > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{r.delta > 0 ? `+${r.delta}` : r.delta}</td>
+                          <td className="px-5 py-3 text-ink-700">{Number(r.balance_after)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 

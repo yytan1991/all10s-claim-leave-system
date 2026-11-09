@@ -38,6 +38,7 @@ import RegistrationFormBuilderPage from './pages/RegistrationFormBuilderPage'
 import LearningMaterialsPage from './pages/LearningMaterialsPage'
 import QuizzesPage from './pages/QuizzesPage'
 import StudentProgressPage from './pages/StudentProgressPage'
+import StudentCreditsPage from './pages/StudentCreditsPage'
 import PublicRegistration from './pages/PublicRegistration'
 import ParentLogin from './pages/ParentLogin'
 import StudentLogin from './pages/StudentLogin'
@@ -354,6 +355,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <StudentProgressPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student-credits"
+        element={
+          <ProtectedRoute>
+            <StudentCreditsPage />
           </ProtectedRoute>
         }
       />

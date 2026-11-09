@@ -23,6 +23,7 @@ import {
   School,
   UserCog,
   CalendarClock,
+  Coins,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -49,6 +50,7 @@ const studentMgmtLinks = [
   { to: '/students', label: 'Students', icon: Users2 },
   { to: '/teachers', label: 'Teachers', icon: UserCog },
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
+  { to: '/student-credits', label: 'Lesson Credits', icon: Coins },
   { to: '/learning-materials', label: 'Learning Materials', icon: BookOpen },
   { to: '/quizzes', label: 'Practice & Quizzes', icon: ClipboardCheck },
   { to: '/student-progress', label: 'Student Progress', icon: TrendingUp },
@@ -62,6 +64,7 @@ const studentMgmtLinks = [
 
 const teacherStudentMgmtLinks = [
   { to: '/student-attendance', label: 'Student Attendance', icon: ClipboardList },
+  { to: '/student-credits', label: 'Lesson Credits', icon: Coins },
   { to: '/learning-materials', label: 'Learning Materials', icon: BookOpen },
   { to: '/quizzes', label: 'Practice & Quizzes', icon: ClipboardCheck },
   { to: '/student-progress', label: 'Student Progress', icon: TrendingUp },

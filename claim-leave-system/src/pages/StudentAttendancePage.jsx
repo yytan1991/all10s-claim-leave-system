@@ -28,19 +28,40 @@ function formatTime(isoString) {
   return new Date(isoString).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' })
 }
 
+// Present and Late both mean the student attended, so both use up a credit. Absent does not.
+const usesUpCredit = (status) => status === 'present' || status === 'late'
+
+function CreditCell({ balance, deduct }) {
+  const after = balance - deduct
+  const tone = after <= 0 ? 'text-rose-600' : after <= 2 ? 'text-amber-600' : 'text-emerald-700'
+  return (
+    <div>
+      <span className={`font-medium ${tone}`}>
+        {balance}
+        {deduct !== 0 && <> → {after}</>}
+      </span>
+      {deduct > 0 && balance <= 0 && <span className="block text-[11px] text-rose-600">No credits left. This will go below 0.</span>}
+      {deduct < 0 && <span className="block text-[11px] text-ink-500">Credit will be returned</span>}
+    </div>
+  )
+}
+
 export default function StudentAttendancePage() {
   const { profile, isAdmin } = useAuth()
   const [allClasses, setAllClasses] = useState([])
   const [classId, setClassId] = useState('')
+  const [session, setSession] = useState(1)
   const [date, setDate] = useState(todayStr())
   const [time, setTime] = useState(nowTimeStr())
   const [students, setStudents] = useState([])
-  const [records, setRecords] = useState({}) // studentId -> { status, markedAt, markedByName }
+  const [records, setRecords] = useState({}) // studentId -> { status, markedAt, markedByName }  (what's on screen)
+  const [original, setOriginal] = useState({}) // the same, as last saved — so only real changes are written
+  const [balances, setBalances] = useState({}) // studentId -> credits left (lessons that use credits)
   const [loading, setLoading] = useState(true)
   const [rosterLoading, setRosterLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [savedMessage, setSavedMessage] = useState('')
 
   useEffect(() => {
     if (profile) loadClasses()
@@ -74,6 +95,14 @@ export default function StudentAttendancePage() {
   // today, and adjust the recorded time freely (for backdating).
   const visibleClasses = isAdmin ? allClasses : allClasses.filter((c) => c.day_of_week === todayAppDow())
 
+  const selectedClass = allClasses.find((c) => c.id === classId)
+  // Lesson settings come from migration 44. Without it the page behaves exactly as before.
+  const sessionAware = Boolean(selectedClass) && 'attendance_marks_per_day' in selectedClass
+  const marksPerDay = sessionAware ? selectedClass.attendance_marks_per_day || 1 : 1
+  const usesCredits = Boolean(selectedClass?.uses_credits)
+  const activeSession = marksPerDay === 2 ? session : 1
+  const sessionWord = marksPerDay === 2 ? (activeSession === 1 ? ' (1st attendance)' : ' (2nd attendance)') : ''
+
   useEffect(() => {
     if (!isAdmin) {
       setDate(todayStr())
@@ -88,25 +117,35 @@ export default function StudentAttendancePage() {
   }, [allClasses, isAdmin])
 
   useEffect(() => {
+    setSession(1)
+  }, [classId])
+
+  useEffect(() => {
     if (classId && date) loadRoster()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, date])
+  }, [classId, date, activeSession, selectedClass?.id])
 
   async function loadRoster() {
     setRosterLoading(true)
-    setSaved(false)
+    setSavedMessage('')
     setError('')
-    const [{ data: enrollments }, { data: attendance }] = await Promise.all([
+    let attendanceQuery = supabase
+      .from('student_attendance')
+      .select('student_id, status, marked_at, profiles(full_name)')
+      .eq('class_id', classId)
+      .eq('attendance_date', date)
+    if (sessionAware) attendanceQuery = attendanceQuery.eq('session_no', activeSession)
+
+    const [{ data: enrollments }, { data: attendance }, { data: ledger }] = await Promise.all([
       supabase
         .from('class_enrollments')
         .select('students(id, full_name)')
         .eq('class_id', classId)
         .eq('org_id', profile.org_id),
-      supabase
-        .from('student_attendance')
-        .select('student_id, status, marked_at, profiles(full_name)')
-        .eq('class_id', classId)
-        .eq('attendance_date', date),
+      attendanceQuery,
+      usesCredits
+        ? supabase.from('student_credit_ledger').select('student_id, delta').eq('class_id', classId)
+        : Promise.resolve({ data: [] }),
     ])
     const studentList = (enrollments || [])
       .map((e) => e.students)
@@ -119,6 +158,13 @@ export default function StudentAttendancePage() {
       recMap[a.student_id] = { status: a.status, markedAt: a.marked_at, markedByName: a.profiles?.full_name }
     })
     setRecords(recMap)
+    setOriginal(recMap)
+
+    const bal = {}
+    ;(ledger || []).forEach((l) => {
+      bal[l.student_id] = (bal[l.student_id] || 0) + l.delta
+    })
+    setBalances(bal)
     setRosterLoading(false)
   }
 
@@ -128,6 +174,7 @@ export default function StudentAttendancePage() {
   }
 
   function setStatus(studentId, status) {
+    setSavedMessage('')
     setRecords((prev) => {
       const next = { ...prev }
       if (next[studentId]?.status === status) delete next[studentId] // clicking the active one clears back to Unmarked
@@ -137,6 +184,7 @@ export default function StudentAttendancePage() {
   }
 
   function markAllAttended() {
+    setSavedMessage('')
     const markedAt = currentMarkedAt()
     setRecords(() => {
       const next = {}
@@ -147,29 +195,54 @@ export default function StudentAttendancePage() {
     })
   }
 
-  async function handleSave() {
-    setSaving(true)
-    setError('')
-    setSaved(false)
+  // Only the marks that were actually changed get written, so students who were already marked keep their
+  // original time (and never lose or gain a credit again by accident).
+  const changedIds = students
+    .filter((s) => (records[s.id]?.status || null) !== (original[s.id]?.status || null))
+    .map((s) => s.id)
 
+  function creditChange(studentId) {
+    return (usesUpCredit(records[studentId]?.status) ? 1 : 0) - (usesUpCredit(original[studentId]?.status) ? 1 : 0)
+  }
+
+  function switchSession(n) {
+    if (n === activeSession) return
+    if (changedIds.length > 0 && !confirm('You have unsaved changes. Switch anyway and discard them?')) return
+    setSession(n)
+  }
+
+  async function handleSave() {
+    setError('')
+    setSavedMessage('')
+    if (changedIds.length === 0) {
+      setSavedMessage('No changes to save.')
+      return
+    }
+    setSaving(true)
+
+    const changed = new Set(changedIds)
     const markedAt = currentMarkedAt()
     const toUpsert = students
-      .filter((s) => records[s.id]?.status)
+      .filter((s) => changed.has(s.id) && records[s.id]?.status)
       .map((s) => ({
         org_id: profile.org_id,
         class_id: classId,
         student_id: s.id,
         attendance_date: date,
+        ...(sessionAware ? { session_no: activeSession } : {}),
         status: records[s.id].status,
         marked_by: profile.id,
         marked_at: markedAt,
       }))
-    const toClear = students.filter((s) => !records[s.id]?.status).map((s) => s.id)
+    const toClear = students.filter((s) => changed.has(s.id) && !records[s.id]?.status).map((s) => s.id)
+
+    const deducted = changedIds.filter((id) => creditChange(id) > 0).length
+    const returned = changedIds.filter((id) => creditChange(id) < 0).length
 
     if (toUpsert.length > 0) {
       const { error: upsertError } = await supabase
         .from('student_attendance')
-        .upsert(toUpsert, { onConflict: 'class_id,student_id,attendance_date' })
+        .upsert(toUpsert, { onConflict: sessionAware ? 'class_id,student_id,attendance_date,session_no' : 'class_id,student_id,attendance_date' })
       if (upsertError) {
         setSaving(false)
         setError(upsertError.message)
@@ -178,12 +251,9 @@ export default function StudentAttendancePage() {
     }
 
     if (toClear.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('student_attendance')
-        .delete()
-        .eq('class_id', classId)
-        .eq('attendance_date', date)
-        .in('student_id', toClear)
+      let deleteQuery = supabase.from('student_attendance').delete().eq('class_id', classId).eq('attendance_date', date).in('student_id', toClear)
+      if (sessionAware) deleteQuery = deleteQuery.eq('session_no', activeSession)
+      const { error: deleteError } = await deleteQuery
       if (deleteError) {
         setSaving(false)
         setError(deleteError.message)
@@ -192,8 +262,15 @@ export default function StudentAttendancePage() {
     }
 
     setSaving(false)
-    setSaved(true)
-    loadRoster()
+    await loadRoster()
+    let message = 'Attendance saved.'
+    if (usesCredits) {
+      const parts = []
+      if (deducted > 0) parts.push(`${deducted} credit${deducted === 1 ? '' : 's'} deducted`)
+      if (returned > 0) parts.push(`${returned} credit${returned === 1 ? '' : 's'} returned`)
+      if (parts.length > 0) message += ` ${parts.join(', ')}.`
+    }
+    setSavedMessage(message)
   }
 
   const STATUS_OPTIONS = [
@@ -241,14 +318,30 @@ export default function StudentAttendancePage() {
         )}
       </div>
 
+      {marksPerDay === 2 && classId && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-ink-700">This lesson has two attendance marks a day. Marking:</span>
+          {[1, 2].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => switchSession(n)}
+              className={activeSession === n ? 'btn-primary text-xs' : 'btn-secondary text-xs'}
+            >
+              {n === 1 ? '1st attendance' : '2nd attendance'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="mb-4">
           <Alert tone="rose">{error}</Alert>
         </div>
       )}
-      {saved && (
+      {savedMessage && (
         <div className="mb-4">
-          <Alert tone="brand">Attendance saved.</Alert>
+          <Alert tone="brand">{savedMessage}</Alert>
         </div>
       )}
 
@@ -275,8 +368,8 @@ export default function StudentAttendancePage() {
           }`}>
             <span>
               {isComplete
-                ? 'All students marked for this session.'
-                : `${students.length - markedCount} of ${students.length} student(s) not yet marked.`}
+                ? `All students marked for this session${sessionWord}.`
+                : `${students.length - markedCount} of ${students.length} student(s) not yet marked${sessionWord}.`}
             </span>
             <button type="button" onClick={markAllAttended} className="btn-secondary text-xs">
               <CheckCheck size={14} /> Mark all attended
@@ -288,6 +381,7 @@ export default function StudentAttendancePage() {
                 <tr>
                   <th className="px-5 py-3 font-medium">Student</th>
                   <th className="px-5 py-3 font-medium">Status</th>
+                  {usesCredits && <th className="px-5 py-3 font-medium">Credits left</th>}
                   <th className="px-5 py-3 font-medium">Marked by</th>
                 </tr>
               </thead>
@@ -313,6 +407,11 @@ export default function StudentAttendancePage() {
                           {!status && <span className="text-xs text-ink-400 ml-1">Unmarked</span>}
                         </div>
                       </td>
+                      {usesCredits && (
+                        <td className="px-5 py-3">
+                          <CreditCell balance={balances[s.id] || 0} deduct={creditChange(s.id)} />
+                        </td>
+                      )}
                       <td className="px-5 py-3 text-xs text-ink-500">
                         {status && record?.markedByName ? (
                           <>
@@ -329,6 +428,11 @@ export default function StudentAttendancePage() {
               </tbody>
             </table>
           </div>
+          {usesCredits && (
+            <p className="text-xs text-ink-500 mt-2">
+              This lesson uses credits: one credit is deducted for each student marked Present or Late when you save. Absent does not deduct.
+            </p>
+          )}
         </>
       )}
 

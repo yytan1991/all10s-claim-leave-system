@@ -140,7 +140,15 @@ export default function ClassesPage() {
               <tbody className="divide-y divide-sand-100">
                 {shownClasses.map((c) => (
                   <tr key={c.id}>
-                    <td className="px-5 py-3 font-medium text-ink-900">{c.name}</td>
+                    <td className="px-5 py-3 font-medium text-ink-900">
+                      {c.name}
+                      {(c.uses_credits || c.attendance_marks_per_day === 2) && (
+                        <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                          {c.uses_credits && <span className="rounded-full bg-brand-50 text-brand-700 text-[11px] px-2 py-0.5 font-medium">Credits</span>}
+                          {c.attendance_marks_per_day === 2 && <span className="rounded-full bg-sky-50 text-sky-700 text-[11px] px-2 py-0.5 font-medium">2 marks/day</span>}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-ink-700">
                       {DAY_NAMES[c.day_of_week]} · {formatTimeLabel(c.start_time)} – {formatTimeLabel(c.end_time)}
                     </td>
@@ -199,6 +207,63 @@ export default function ClassesPage() {
   )
 }
 
+// Settings added by migration 44. They are only sent when they matter, so the page keeps working
+// even before that SQL has been run.
+function lessonSettingsPayload({ marksPerDay, usesCredits, creditsPerPackage }, existing) {
+  const marks = Number(marksPerDay) === 2 ? 2 : 1
+  const hasColumns = Boolean(existing) && 'uses_credits' in existing
+  const payload = {}
+  if (hasColumns || marks !== 1) payload.attendance_marks_per_day = marks
+  if (hasColumns || usesCredits) {
+    payload.uses_credits = Boolean(usesCredits)
+    payload.credits_per_package = Math.floor(Number(creditsPerPackage)) || 12
+  }
+  return payload
+}
+
+function validateCredits(usesCredits, creditsPerPackage) {
+  if (usesCredits && !(Number.isInteger(Number(creditsPerPackage)) && Number(creditsPerPackage) >= 1)) {
+    return 'Enter how many credits one package has (a whole number, 1 or more).'
+  }
+  return ''
+}
+
+// Attendance-per-day and credits settings, shared by the New lesson and Edit lesson forms.
+function LessonSettingsFields({ marksPerDay, setMarksPerDay, usesCredits, setUsesCredits, creditsPerPackage, setCreditsPerPackage }) {
+  return (
+    <>
+      <div>
+        <label className="field-label">Attendance marks per day</label>
+        <select className="field-input" value={marksPerDay} onChange={(e) => setMarksPerDay(e.target.value)}>
+          <option value="1">Once a day</option>
+          <option value="2">Twice a day (a student may attend 2 sessions)</option>
+        </select>
+      </div>
+      <div className="rounded-md border border-sand-200 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-ink-900 cursor-pointer">
+          <input type="checkbox" checked={usesCredits} onChange={(e) => setUsesCredits(e.target.checked)} />
+          This lesson uses credits
+        </label>
+        <p className="text-xs text-ink-500 mt-1">One credit is deducted each time a student is marked Present or Late.</p>
+        {usesCredits && (
+          <div className="mt-3">
+            <label className="field-label">Credits in one package</label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              className="field-input"
+              value={creditsPerPackage}
+              onChange={(e) => setCreditsPerPackage(e.target.value)}
+              placeholder="e.g. 12"
+            />
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
   const [name, setName] = useState('')
   const [dayOfWeek, setDayOfWeek] = useState(0)
@@ -206,6 +271,9 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
   const [endTime, setEndTime] = useState('16:00')
   const [room, setRoom] = useState('')
   const [feeAmount, setFeeAmount] = useState('')
+  const [marksPerDay, setMarksPerDay] = useState('1')
+  const [usesCredits, setUsesCredits] = useState(false)
+  const [creditsPerPackage, setCreditsPerPackage] = useState('12')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -220,6 +288,11 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
       setError('End time must be after start time.')
       return
     }
+    const creditsError = validateCredits(usesCredits, creditsPerPackage)
+    if (creditsError) {
+      setError(creditsError)
+      return
+    }
     setSaving(true)
     const { error: insertError } = await supabase.from('classes').insert({
       org_id: orgId,
@@ -229,6 +302,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
       end_time: endTime,
       room: room || null,
       fee_amount: feeAmount === '' ? null : Number(feeAmount),
+      ...lessonSettingsPayload({ marksPerDay, usesCredits, creditsPerPackage }, null),
       created_by: createdBy,
     })
     setSaving(false)
@@ -241,7 +315,7 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="card w-full max-w-sm p-6">
+      <div className="card w-full max-w-sm p-6 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-ink-900">New lesson</h3>
           <button onClick={onClose} className="text-ink-500 hover:text-ink-900">
@@ -302,6 +376,14 @@ function CreateClassModal({ orgId, createdBy, onClose, onSaved }) {
               />
             </div>
           </div>
+          <LessonSettingsFields
+            marksPerDay={marksPerDay}
+            setMarksPerDay={setMarksPerDay}
+            usesCredits={usesCredits}
+            setUsesCredits={setUsesCredits}
+            creditsPerPackage={creditsPerPackage}
+            setCreditsPerPackage={setCreditsPerPackage}
+          />
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Creating…' : 'Create lesson'}
@@ -324,6 +406,9 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
   const [endTime, setEndTime] = useState(classItem.end_time?.slice(0, 5) || '')
   const [room, setRoom] = useState(classItem.room || '')
   const [feeAmount, setFeeAmount] = useState(classItem.fee_amount ?? '')
+  const [marksPerDay, setMarksPerDay] = useState(String(classItem.attendance_marks_per_day || 1))
+  const [usesCredits, setUsesCredits] = useState(Boolean(classItem.uses_credits))
+  const [creditsPerPackage, setCreditsPerPackage] = useState(String(classItem.credits_per_package || 12))
   const [savingDetails, setSavingDetails] = useState(false)
   const [detailsError, setDetailsError] = useState('')
   const [detailsSaved, setDetailsSaved] = useState(false)
@@ -340,6 +425,12 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
       setDetailsError('End time must be after start time.')
       return
     }
+    const creditsError = validateCredits(usesCredits, creditsPerPackage)
+    if (creditsError) {
+      setDetailsError(creditsError)
+      return
+    }
+    const settings = lessonSettingsPayload({ marksPerDay, usesCredits, creditsPerPackage }, classItem)
     setSavingDetails(true)
     const { error: updateError } = await supabase
       .from('classes')
@@ -350,6 +441,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
         end_time: endTime,
         room: room || null,
         fee_amount: feeAmount === '' ? null : Number(feeAmount),
+        ...settings,
       })
       .eq('id', classItem.id)
     setSavingDetails(false)
@@ -364,6 +456,7 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
     classItem.end_time = endTime
     classItem.room = room || null
     classItem.fee_amount = feeAmount === '' ? null : Number(feeAmount)
+    Object.assign(classItem, settings)
   }
 
   return (
@@ -426,6 +519,14 @@ function EditClassModal({ orgId, createdBy, classItem, onClose, onSaved }) {
               />
             </div>
           </div>
+          <LessonSettingsFields
+            marksPerDay={marksPerDay}
+            setMarksPerDay={setMarksPerDay}
+            usesCredits={usesCredits}
+            setUsesCredits={setUsesCredits}
+            creditsPerPackage={creditsPerPackage}
+            setCreditsPerPackage={setCreditsPerPackage}
+          />
           <button type="submit" disabled={savingDetails} className="btn-primary">
             {savingDetails ? 'Saving…' : 'Save lesson details'}
           </button>

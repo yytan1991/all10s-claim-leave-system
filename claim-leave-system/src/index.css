@@ -59,19 +59,36 @@
 
   /* sidebar menu items */
   .nav-link {
-    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium text-ink-700
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2 text-sm font-medium text-ink-700
       hover:bg-white hover:text-ink-900 transition-colors;
   }
   .nav-link-active {
-    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold text-white bg-accent shadow-pill;
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2 text-sm font-semibold text-white bg-accent shadow-pill;
   }
 
   /* the row of page tabs along the top of each page */
   .tab-pill {
-    @apply inline-flex items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium text-ink-700
+    @apply inline-flex items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium text-ink-700
       hover:bg-white transition-colors;
   }
   .tab-pill-active {
-    @apply inline-flex items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-white bg-accent shadow-pill;
+    @apply inline-flex items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-white bg-accent shadow-pill;
+  }
+}
+
+/* Compact text size (the default, on screens wider than a phone): everything is one size smaller and
+   table rows are tighter, so more fits on one page. Switch back under the account menu → Text size. */
+@media (min-width: 768px) {
+  html.density-compact {
+    font-size: 14px;
+  }
+  html.density-compact .text-xs {
+    font-size: 0.8rem;
+    line-height: 1.1rem;
+  }
+  html.density-compact .card table th,
+  html.density-compact .card table td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
   }
 }

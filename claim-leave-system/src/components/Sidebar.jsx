@@ -28,7 +28,7 @@ export default function Sidebar({ className = '', width = 'w-60', variant = 'sta
         variant === 'drawer' ? 'bg-white' : 'bg-white/60 backdrop-blur border-r border-white/70'
       } ${className}`}
     >
-      <div className="flex items-center gap-3 px-5 pb-4 pt-6">
+      <div className="flex items-center gap-3 px-5 pb-3 pt-5">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent font-display text-xl font-bold text-white shadow-pill">W</div>
         <div>
           <p className="font-display text-lg font-semibold leading-tight text-ink-900">WiiTeam</p>

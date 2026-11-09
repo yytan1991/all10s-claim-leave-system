@@ -4,6 +4,10 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import ModuleTabs from './ModuleTabs'
 import BottomNav from './BottomNav'
+import { applyDensity } from '../lib/density'
+
+// Apply the saved text size as soon as the app loads, so there is no flash of the larger size.
+applyDensity()
 
 export default function AppLayout({ title, subtitle, children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -28,11 +32,11 @@ export default function AppLayout({ title, subtitle, children }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar />
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pb-24 md:px-8 md:pb-8">
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pb-24 md:px-6 md:pb-6">
           <ModuleTabs />
-          <div className="mb-5">
-            <h1 className="text-2xl font-semibold">{title}</h1>
-            {subtitle && <p className="mt-1 text-sm text-ink-500">{subtitle}</p>}
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h1 className="text-lg font-semibold">{title}</h1>
+            {subtitle && <p className="text-xs text-ink-500">{subtitle}</p>}
           </div>
           {children}
         </main>

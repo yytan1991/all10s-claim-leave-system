@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { initials } from '../lib/helpers'
 import { getModules, flattenPages } from '../lib/navConfig'
+import { getDensity, setDensity } from '../lib/density'
 
 function useClickOutside(ref, onOutside) {
   useEffect(() => {
@@ -69,7 +70,7 @@ function QuickSearch({ pages }) {
         onKeyDown={onKeyDown}
         placeholder="Search pages, e.g. invoices, leave, students…"
         aria-label="Search pages"
-        className="w-full rounded-full bg-white/80 py-2.5 pl-10 pr-4 text-sm text-ink-900 shadow-card placeholder:text-ink-500/70 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+        className="w-full rounded-full bg-white/80 py-2 pl-10 pr-4 text-sm text-ink-900 shadow-card placeholder:text-ink-500/70 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
       />
       {open && query.trim() && (
         <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-white bg-white shadow-card">
@@ -142,7 +143,7 @@ function NotificationBell() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={total ? `Notifications, ${total} waiting` : 'Notifications'}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-ink-700 shadow-card hover:bg-white"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-ink-700 shadow-card hover:bg-white"
       >
         <Bell size={18} />
         {total > 0 && (
@@ -176,9 +177,15 @@ function NotificationBell() {
 function UserMenu() {
   const { profile, memberships, switchCompany, signOut } = useAuth()
   const [open, setOpen] = useState(false)
+  const [density, setDensityState] = useState(getDensity())
   const ref = useRef(null)
   const close = useCallback(() => setOpen(false), [])
   useClickOutside(ref, close)
+
+  function chooseDensity(value) {
+    setDensity(value)
+    setDensityState(value)
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -186,7 +193,7 @@ function UserMenu() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Account menu"
-        className="flex items-center gap-2.5 rounded-full bg-white/80 py-1.5 pl-1.5 pr-3 shadow-card hover:bg-white"
+        className="flex items-center gap-2.5 rounded-full bg-white/80 py-1 pl-1 pr-3 shadow-card hover:bg-white"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">{initials(profile?.full_name)}</span>
         <span className="hidden text-left sm:block">
@@ -206,7 +213,26 @@ function UserMenu() {
               <Building2 size={16} /> Switch company
             </button>
           )}
-          <button type="button" onClick={signOut} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-ink-700 hover:bg-sand-50">
+          <div className="hidden border-t border-sand-100 px-4 py-3 md:block">
+            <p className="mb-2 text-xs font-medium text-ink-500">Text size</p>
+            <div className="inline-flex rounded-full bg-sand-100 p-1 text-xs font-medium">
+              {[
+                ['compact', 'Compact'],
+                ['comfortable', 'Comfortable'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => chooseDensity(value)}
+                  aria-pressed={density === value}
+                  className={density === value ? 'rounded-full bg-white px-3 py-1 text-brand-700 shadow-sm' : 'rounded-full px-3 py-1 text-ink-500'}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button type="button" onClick={signOut} className="flex w-full items-center gap-2.5 border-t border-sand-100 px-4 py-3 text-left text-sm text-ink-700 hover:bg-sand-50">
             <LogOut size={16} /> Log out
           </button>
         </div>
@@ -220,7 +246,7 @@ export default function Topbar() {
   const pages = useMemo(() => flattenPages(getModules({ isManager, isAdmin })), [isManager, isAdmin])
 
   return (
-    <header className="flex items-center gap-3 px-5 py-4 md:px-8">
+    <header className="flex items-center gap-3 px-5 py-2.5 md:px-6">
       <p className="font-display text-lg font-semibold text-brand-700 md:hidden">WiiTeam</p>
       <div className="hidden max-w-xl flex-1 md:block">
         <QuickSearch pages={pages} />

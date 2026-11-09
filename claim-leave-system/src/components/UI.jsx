@@ -14,15 +14,15 @@ export function StatCard({ label, value, hint, icon: Icon, tone = 'brand' }) {
     sky: 'bg-sky-50 text-sky-600',
   }
   return (
-    <div className="card flex items-center gap-4 p-4">
+    <div className="card flex items-center gap-3 p-3">
       {Icon && (
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${toneClasses[tone] || toneClasses.brand}`}>
-          <Icon size={22} />
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${toneClasses[tone] || toneClasses.brand}`}>
+          <Icon size={20} />
         </div>
       )}
       <div className="min-w-0">
-        <p className="font-display text-2xl font-semibold leading-tight">{value}</p>
-        <p className="truncate text-sm text-ink-500">{label}</p>
+        <p className="font-display text-xl font-semibold leading-tight">{value}</p>
+        <p className="truncate text-xs text-ink-500">{label}</p>
         {hint && <p className="mt-0.5 text-xs text-ink-500/80">{hint}</p>}
       </div>
     </div>
